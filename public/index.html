@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dinoz Sale — Hệ Thống Quản Lý Toàn Diện</title>
+    <meta name="description" content="Hệ thống quản lý link và theo dõi doanh số sản phẩm Dinoz Sale">
+    <link rel="stylesheet" href="styles.css?v=4.7">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+</head>
+<body>
+    <!-- ==== MÀN HÌNH ĐĂNG NHẬP ==== -->
+    <div id="login-screen" class="screen active">
+        <div class="login-card glass-panel">
+            <h2>Dinoz Sale <span style="font-size:0.5em;color:gray;">v4.5</span></h2>
+            <p>Chào mừng bạn quay trở lại hệ thống quản lý</p>
+            <form id="login-form">
+                <div class="input-group">
+                    <label>Tên đăng nhập</label>
+                    <input type="text" id="username" required placeholder="Nhập tên đăng nhập...">
+                </div>
+                <div class="input-group">
+                    <label>Mật khẩu</label>
+                    <input type="password" id="password" required placeholder="Nhập mật khẩu...">
+                </div>
+                <button type="submit" class="btn-primary">Vào Hệ Thống</button>
+            </form>
+            <p style="margin-top:15px; font-size:0.8em; color:var(--text-secondary);">Mặc định: tài khoản <b>admin</b>, password <b>Hello0</b></p>
+        </div>
+    </div>
+
+    <!-- ==== DASHBOARD ==== -->
+    <div id="dashboard-screen" class="screen hidden">
+        <aside class="sidebar glass-panel">
+            <button id="btn-toggle-sidebar-edge" class="btn-sidebar-edge" title="Thu gọn / Mở rộng Sidebar">▶</button>
+            <div class="logo">
+                <a href="#" id="logo-link" style="text-decoration: none; color: inherit;">
+                    <h3>Dinoz Sale <span style="font-size:0.5em;opacity:0.6">Admin</span></h3>
+                </a>
+            </div>
+
+            <div class="menu-sections" id="sidebar-menu">
+                <!-- SECTION: QUẢN LÝ CHUNG -->
+                <div class="menu-box">
+                    <h4 class="section-title">QUẢN LÝ CHUNG</h4>
+                    <nav class="nav-tabs vertical">
+                        <button class="nav-tab active" data-tab="links-tab" id="nav-links">
+                            <span class="nav-icon">🔗</span><span class="nav-label">Quản Lý Links</span>
+                        </button>
+                        <button class="nav-tab" data-tab="accounts-tab" id="nav-accounts">
+                            <span class="nav-icon">👥</span><span class="nav-label">Quản Lý Account</span>
+                        </button>
+                        <button class="nav-tab" data-tab="merchants-tab" id="nav-merchants">
+                            <span class="nav-icon">🏪</span><span class="nav-label">Quản Lý Merchant</span>
+                        </button>
+                        <button class="nav-tab" data-tab="categories-tab" id="nav-categories">
+                            <span class="nav-icon">🏷️</span><span class="nav-label">Quản Lý Category</span>
+                        </button>
+                        <button class="nav-tab" data-tab="schedule-tab" id="nav-schedule">
+                            <span class="nav-icon">📅</span><span class="nav-label">Lịch Công Việc</span>
+                        </button>
+                        <button class="nav-tab" data-tab="samples-tab" id="nav-samples">
+                            <span class="nav-icon">🔬</span><span class="nav-label">Quản Lý Mẫu</span>
+                        </button>
+                    </nav>
+                </div>
+
+                <!-- SECTION: QUẢN LÝ DOANH SỐ -->
+                <div class="menu-box">
+                    <h4 class="section-title">QUẢN LÝ DOANH SỐ</h4>
+                    <nav class="nav-tabs vertical">
+                        <button class="nav-tab" data-tab="sales-tab" id="nav-sales">
+                            <span class="nav-icon">🛍️</span><span class="nav-label">Nhập Sales</span>
+                        </button>
+                        <button class="nav-tab" data-tab="stats-tab" id="nav-stats">
+                            <span class="nav-icon">📊</span><span class="nav-label">Thống Kê</span>
+                        </button>
+                    </nav>
+                </div>
+
+                <!-- SECTION: ADMIN -->
+                <div id="admin-menu" class="menu-box hidden">
+                    <h4 class="section-title">CÀI ĐẶT</h4>
+                    <button class="btn-secondary w-full" id="btn-open-users">🧑‍💻 Người Dùng</button>
+                </div>
+            </div>
+
+            <div class="user-info">
+                <div>
+                    <span id="display-username" style="display:block;">User</span>
+                    <button id="btn-change-password" class="btn-text" style="font-size: 0.8em; color: var(--accent-color);">Đổi mật khẩu</button>
+                </div>
+                <button id="btn-logout" class="btn-text">Đăng xuất</button>
+            </div>
+        </aside>
+
+        <main class="main-content">
+            <header class="topbar glass-panel">
+                <div class="topbar-left" style="display: flex; align-items: center; gap: 10px;">
+                    <button id="btn-mobile-menu" class="btn-icon hidden-desktop" style="display: none; font-size: 1.2em; padding: 4px 8px;">☰</button>
+                    <h2 id="topbar-title">Quản Lý Links</h2>
+                </div>
+                <div class="topbar-actions">
+                    <div class="stats" id="topbar-stats">
+                        Tổng số: <span id="total-links">0</span> link
+                    </div>
+                    <button id="btn-export-excel" class="btn-primary" style="padding: 8px 16px; margin-left: 15px;">⬇️ Xuất Excel (CSV)</button>
+                </div>
+            </header>
+
+            <!-- ===== TAB: LINKS MANAGER ===== -->
+            <div id="links-tab" class="tab-content active">
+                <div class="content-wrapper">
+                    <div class="add-link-section glass-panel">
+                        <h3>Thêm Link Mới</h3>
+                        <form id="add-link-form">
+                            <div class="form-row">
+                                <div class="input-group flex-2">
+                                    <label>Danh sách Link (Copy/Paste nhiều link, mỗi link một dòng)</label>
+                                    <textarea id="link-urls" rows="4" placeholder="https://example1.com&#10;https://example2.com" required></textarea>
+                                </div>
+                                <div class="input-group flex-1">
+                                    <label>Ngày nhập</label>
+                                    <input type="date" id="link-date" required>
+                                </div>
+                            </div>
+                            <div class="input-group">
+                                <label>Chọn danh mục (Có thể check chọn nhiều)</label>
+                                <div class="checkbox-group" id="link-categories"></div>
+                            </div>
+                            <div id="duplicate-warnings" class="warnings-container hidden"></div>
+                            <div class="form-actions">
+                                <label class="checkbox-label hidden" id="force-save-label">
+                                    <input type="checkbox" id="force-save"> Vẫn lưu đè thông tin bị trùng
+                                </label>
+                                <button type="submit" class="btn-primary" id="btn-save-links">Lưu Danh Sách Link</button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <div class="links-display-section glass-panel">
+                        <div style="margin-bottom: 24px;">
+                            <h4 style="margin-bottom: 12px; color: var(--text-secondary); font-size: 0.85em; text-transform: uppercase;">Lọc theo tháng</h4>
+                            <div id="month-stats-container" style="display: flex; gap: 10px; flex-wrap: wrap;"></div>
+                        </div>
+                        <div class="filter-bar">
+                            <input type="text" id="search-input" placeholder="Tìm kiếm link...">
+                            <select id="filter-category"><option value="ALL">Tất cả danh mục</option></select>
+                            <select id="items-per-page">
+                                <option value="25">25 dòng</option>
+                                <option value="50">50 dòng</option>
+                                <option value="100">100 dòng</option>
+                            </select>
+                            <button id="btn-clear-month-filter" class="btn-secondary hidden">Xóa lọc Tháng</button>
+                        </div>
+                        <div class="table-container">
+                            <table class="modern-table">
+                                <thead>
+                                    <tr>
+                                        <th>URL</th>
+                                        <th>Ngày Nhập</th>
+                                        <th>Người Thêm</th>
+                                        <th>Người Sửa</th>
+                                        <th>Danh Mục</th>
+                                        <th style="width: 140px;">Thiết Lập</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="links-table-body"></tbody>
+                            </table>
+                        </div>
+                        <div id="pagination-controls" class="pagination-container hidden">
+                            <button class="btn-icon" id="btn-prev-page">◀</button>
+                            <span id="page-info">Trang 1 / 1</span>
+                            <button class="btn-icon" id="btn-next-page">▶</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ===== TAB: ACCOUNTS MANAGEMENT ===== -->
+            <div id="accounts-tab" class="tab-content">
+                <div class="content-wrapper">
+                    <div class="add-link-section glass-panel">
+                        <h3>👥 Quản Lý Account</h3>
+                        <form id="add-account-form">
+                            <div class="form-row">
+                                <div class="input-group flex-2">
+                                    <label>Tên Account mới</label>
+                                    <input type="text" id="new-account-name" placeholder="VD: Amazon_Prime_US" required>
+                                </div>
+                                <div class="form-actions" style="margin-top: 0;">
+                                    <button type="submit" class="btn-primary">Thêm Account</button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                    <div class="links-display-section glass-panel">
+                        <div class="table-container">
+                            <table class="modern-table">
+                                <thead><tr><th>Tên Account</th><th style="width: 120px;">Hành Động</th></tr></thead>
+                                <tbody id="accounts-table-body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ===== TAB: MERCHANTS MANAGEMENT ===== -->
+            <div id="merchants-tab" class="tab-content">
+                <div class="content-wrapper">
+                    <div class="add-link-section glass-panel">
+                        <h3>🏪 Quản Lý Merchant</h3>
+                        <form id="add-merchant-form">
+                            <div class="form-row">
+                                <div class="input-group flex-2">
+                                    <label>Tên Merchant mới</label>
+                                    <input type="text" id="new-merchant-name" placeholder="VD: Etsy_Shop_Global" required>
+                                </div>
+                                <div class="form-actions" style="margin-top: 0;">
+                                    <button type="submit" class="btn-primary">Thêm Merchant</button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                    <div class="links-display-section glass-panel">
+                        <div class="table-container">
+                            <table class="modern-table">
+                                <thead><tr><th>Tên Merchant</th><th style="width: 120px;">Hành Động</th></tr></thead>
+                                <tbody id="merchants-table-body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ===== TAB: CATEGORIES MANAGEMENT ===== -->
+            <div id="categories-tab" class="tab-content">
+                <div class="content-wrapper">
+                    <div class="add-link-section glass-panel">
+                        <h3>🏷️ Quản Lý Category</h3>
+                        <form id="add-category-full-form">
+                            <div class="form-row">
+                                <div class="input-group flex-2">
+                                    <label>Tên Category mới</label>
+                                    <input type="text" id="new-category-full-name" placeholder="VD: Phụ kiện điện thoại" required>
+                                </div>
+                                <div class="form-actions" style="margin-top: 0;">
+                                    <button type="submit" class="btn-primary">Thêm Category</button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                    <div class="links-display-section glass-panel">
+                        <div class="table-container">
+                            <table class="modern-table">
+                                <thead><tr><th>Tên Category</th><th style="width: 120px;">Hành Động</th></tr></thead>
+                                <tbody id="categories-table-body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ===== TAB: SALES MANAGEMENT ===== -->
+            <div id="sales-tab" class="tab-content">
+                <div class="content-wrapper">
+                    <div class="add-link-section glass-panel">
+                        <h3>🛍️ Nhập Dữ Liệu Doanh Số</h3>
+                        <form id="add-sales-form">
+                            <input type="hidden" id="edit-sales-id-inline" value="">
+                            <div class="form-row" style="flex-wrap: wrap;">
+                                <div class="input-group" style="flex: 0.8; min-width: 120px;">
+                                    <label>Ngày</label>
+                                    <input type="date" id="sales-date" required>
+                                </div>
+                                <div class="input-group flex-1">
+                                    <label>Account</label>
+                                    <select id="sales-account" required><option value="">-- Chọn Account --</option></select>
+                                </div>
+                                <div class="input-group" style="flex: 1.5; min-width: 200px;">
+                                    <label>Mã SKU (Amazon)</label>
+                                    <div style="display:flex; gap:8px;">
+                                        <input type="text" id="sales-sku" placeholder="VD: B07FZ8S74R" required style="flex:1; text-transform:uppercase;">
+                                        <button type="button" id="btn-scan-sku" class="btn-primary" style="white-space:nowrap; padding: 0 16px;">
+                                            <span id="scan-btn-text">🔍 Quét</span>
+                                            <span id="scan-btn-loader" class="hidden">⏳</span>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="input-group flex-1">
+                                    <label>Merchant</label>
+                                    <select id="sales-merchant" required><option value="">-- Chọn Merchant --</option></select>
+                                </div>
+                            </div>
+                            <div class="form-row" style="flex-wrap: wrap;">
+                                <div class="input-group flex-2" style="min-width: 300px;">
+                                    <label>Tiêu Đề (Tự động quét)</label>
+                                    <input type="text" id="sales-title" placeholder="Nhấn quét SKU..." style="background: rgba(16,185,129,0.05);">
+                                </div>
+                                <div class="input-group flex-1" style="min-width: 140px;">
+                                    <label>Category</label>
+                                    <select id="sales-category" required><option value="">-- Chọn Category --</option></select>
+                                </div>
+                                <div class="input-group" style="flex: 1; max-width: 140px; min-width: 110px;">
+                                    <label>Sales</label>
+                                    <div class="custom-spinner">
+                                        <button type="button" onclick="adjustSalesQty(-1)">-</button>
+                                        <input type="number" id="sales-qty" value="0" min="0" required>
+                                        <button type="button" onclick="adjustSalesQty(1)">+</button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-actions" style="justify-content: flex-end; gap: 12px; margin-top:20px;">
+                                <span id="sales-form-msg" style="color: var(--success-color); flex:1; text-align: left;"></span>
+                                <button type="button" class="btn-secondary hidden" id="btn-cancel-edit-sales">Trở Về Mặc Định (Thêm Mới)</button>
+                                <button type="submit" class="btn-primary" id="btn-save-sales">💾 Lưu Dữ Liệu</button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <div class="links-display-section glass-panel">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+                            <h3>📋 Danh Sách Doanh Số</h3>
+                            <div style="display:flex; gap:10px;">
+                                <input type="text" id="sales-search" placeholder="Tìm kiếm..." style="width:200px;">
+                                <input type="date" id="sales-filter-date">
+                            </div>
+                        </div>
+                        <div class="table-container">
+                            <table class="modern-table">
+                                <thead>
+                                    <tr>
+                                        <th>Ngày</th><th>SKU</th><th>Tiêu Đề</th><th>Account</th><th>Merchant</th><th>Category</th><th>Units</th><th>Thao Tác</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="sales-table-body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ===== TAB: STATISTICS ===== -->
+            <div id="stats-tab" class="tab-content">
+                <div class="content-wrapper">
+                    <div class="stats-cards-row" id="stats-summary-cards"></div>
+                    <div class="form-row" style="align-items:start; gap:20px; flex-wrap:wrap;">
+                        <div class="links-display-section glass-panel" style="flex:1; min-width:300px;">
+                            <h3>🏆 Top Tuần</h3>
+                            <div class="table-container" style="margin-top:16px;">
+                                <table class="modern-table">
+                                    <thead><tr><th>SKU</th><th>Tiêu Đề</th><th>Category</th><th>Link</th></tr></thead>
+                                    <tbody id="top-weekly-body"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="links-display-section glass-panel" style="flex:1; min-width:300px;">
+                            <h3>📅 Top Tháng</h3>
+                            <div class="table-container" style="margin-top:16px;">
+                                <table class="modern-table">
+                                    <thead><tr><th>SKU</th><th>Tiêu Đề</th><th>Category</th><th>Link</th></tr></thead>
+                                    <tbody id="top-monthly-body"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="links-display-section glass-panel">
+                        <h3>📈 Xu Hướng 14 Ngày</h3>
+                        <div id="sales-chart" style="margin-top: 20px; display:flex; align-items:flex-end; gap:8px; height:160px;"></div>
+                        <div id="sales-chart-labels" style="display:flex; gap:8px; padding-top: 8px;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ===== TAB: WORK SCHEDULE ===== -->
+            <div id="schedule-tab" class="tab-content">
+                <div class="content-wrapper">
+                    <div class="calendar-wrapper">
+                        <div class="calendar-container glass-panel">
+                            <div class="calendar-controls">
+                                <button class="btn-icon" id="btn-prev-month">◀</button>
+                                <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
+                                    <h3 id="calendar-month-year">Tháng --, ----</h3>
+                                    <div id="admin-calendar-filters" class="hidden" style="display: flex; align-items: center; gap: 8px;">
+                                        <label style="font-size: 0.7em; color: var(--text-secondary); white-space: nowrap;">Lọc theo:</label>
+                                        <select id="schedule-user-filter" style="padding: 2px 8px; font-size: 0.8em; height: 28px; width: auto; background: rgba(255,255,255,0.05);">
+                                            <option value="all">Tất cả nhân viên</option>
+                                        </select>
+                                        <button type="button" id="btn-refresh-schedule" class="btn-primary" style="padding: 2px 10px; font-size: 0.8em; height: 28px;">🔄 Cập nhật</button>
+                                    </div>
+                                </div>
+                                <button class="btn-icon" id="btn-next-month">▶</button>
+                            </div>
+                            <div class="calendar-grid" id="calendar-grid">
+                                <!-- Days will be generated by JS -->
+                            </div>
+                        </div>
+                        <div class="task-details-panel glass-panel">
+                            <div id="selected-day-header">
+                                <h3 id="current-selected-date">Chọn một ngày</h3>
+                                <button class="btn-primary" id="btn-add-task-today" style="width: 100%; margin-bottom: 20px;">+ Thêm Công Việc</button>
+                            </div>
+                            <div class="task-list" id="day-task-list">
+                                <p style="text-align: center; color: var(--text-secondary); opacity: 0.5;">Không có công việc nào.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ===== TAB: SAMPLE MANAGEMENT (QUẢN LÝ MẪU) ===== -->
+            <div id="samples-tab" class="tab-content">
+                <div class="content-wrapper">
+                    <div class="add-link-section glass-panel">
+                        <h3>🔬 Yêu Cầu Link Sản Phẩm</h3>
+                        <form id="add-sample-form">
+                            <div class="form-row">
+                                <div class="input-group flex-2">
+                                    <label>Mã Design</label>
+                                    <input type="text" id="sample-design-id" placeholder="VD: DINOZ-2024-001" required>
+                                </div>
+                                <div class="form-actions" style="margin-top: 0;">
+                                    <button type="submit" class="btn-primary">Gửi Yêu Cầu</button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                    <div class="links-display-section glass-panel">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap: wrap; gap: 10px;">
+                            <h3>📋 Danh Sách Yêu Cầu Mẫu</h3>
+                            <div class="filter-bar" style="margin:0; background:none; padding:0;">
+                                <input type="text" id="sample-search-input" placeholder="Tìm kiếm Mã Design..." style="width: 250px;">
+                            </div>
+                        </div>
+                        <div class="table-container">
+                            <table class="modern-table">
+                                <thead>
+                                    <tr>
+                                        <th>Ngày Yêu Cầu</th>
+                                        <th>Mã Design</th>
+                                        <th>Người Yêu Cầu</th>
+                                        <th>Trạng Thái</th>
+                                        <th>Link Sản Phẩm</th>
+                                        <th>Ngày Hết Hạn</th>
+                                        <th id="sample-admin-col-head" class="hidden">Thao Tác</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="samples-table-body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- SIDEBAR OVERLAY -->
+    <div id="sidebar-overlay" class="sidebar-overlay hidden"></div>
+
+    <!-- MODALS (kept for user management and link editing) -->
+    <div id="modal-overlay" class="modal-overlay hidden">
+        <div id="modal-users" class="modal glass-panel hidden" style="width: 600px; max-width: 95%;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                <h3>👥 Quản Lý Người Dùng</h3>
+                <button type="button" class="btn-secondary btn-close-modal">Đóng</button>
+            </div>
+            
+            <div class="glass-panel" style="background: rgba(255,255,255,0.03); padding: 15px; margin-bottom: 20px;">
+                <h4 style="margin-bottom: 12px; font-size: 0.9em; text-transform: uppercase; color: var(--text-secondary);">Thêm Người Dùng Mới</h4>
+                <form id="add-user-form" style="display:flex; gap:10px; flex-wrap:wrap; align-items: flex-end;">
+                    <div class="input-group" style="margin:0; flex:1; min-width: 120px;">
+                        <label>Tài khoản</label>
+                        <input type="text" id="new-user-name" required placeholder="Tên đăng nhập">
+                    </div>
+                    <div class="input-group" style="margin:0; flex:1; min-width: 120px;">
+                        <label>Mật khẩu</label>
+                        <input type="password" id="new-user-pass" required placeholder="Mật khẩu">
+                    </div>
+                    <div class="input-group" style="margin:0; width: 100px;">
+                        <label>Vai trò</label>
+                        <select id="new-user-role">
+                            <option value="user">User</option>
+                            <option value="admin">Admin</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn-primary" style="height: 42px;">Thêm</button>
+                </form>
+            </div>
+
+            <div class="table-container" style="max-height: 300px; overflow-y: auto;">
+                <table class="modern-table">
+                    <thead>
+                        <tr>
+                            <th>Tài khoản</th><th>Vai trò</th><th>Thao tác</th>
+                        </tr>
+                    </thead>
+                    <tbody id="users-table-body"></tbody>
+                </table>
+            </div>
+        </div>
+        <div id="modal-password" class="modal glass-panel hidden" style="width: 400px;">
+            <h3>Đổi Mật Khẩu</h3>
+            <form id="change-pass-form">
+                <div class="input-group"><label>Mật khẩu cũ</label><input type="password" id="old-pass" required></div>
+                <div class="input-group"><label>Mật khẩu mới</label><input type="password" id="new-pass" required></div>
+                <div class="modal-actions"><button type="button" class="btn-secondary btn-close-modal">Hủy</button><button type="submit" class="btn-primary">Lưu</button></div>
+            </form>
+        </div>
+        <div id="modal-edit-link" class="modal glass-panel hidden">
+            <h3>Sửa Link</h3>
+            <input type="hidden" id="edit-link-id">
+            <div class="input-group"><label>URL</label><input type="text" id="edit-link-url" required></div>
+            <div class="input-group"><label>Ngày</label><input type="date" id="edit-link-date" required></div>
+            <div class="input-group"><label>Danh mục</label><div class="checkbox-group" id="edit-link-categories"></div></div>
+            <div class="modal-actions"><button type="button" class="btn-secondary btn-close-modal">Hủy</button><button type="button" class="btn-primary" id="btn-save-edit-link">Lưu</button></div>
+        </div>
+        <div id="modal-task" class="modal glass-panel hidden" style="width: 800px; max-width: 95vw;">
+            <h3 id="modal-task-header">Thêm Công Việc</h3>
+            <input type="hidden" id="task-id">
+            <input type="hidden" id="task-date">
+            <div class="input-group" id="assignee-group" class="hidden">
+                <label>Giao cho nhân viên</label>
+                <select id="task-assignee-input"></select>
+            </div>
+            <div class="input-group">
+                <label>Tiêu đề công việc</label>
+                <input type="text" id="task-title-input" required placeholder="Nhập tên việc cần làm...">
+            </div>
+            <div class="input-group">
+                <label>Mô tả chi tiết</label>
+                <textarea id="task-desc-input" rows="3" placeholder="Ghi chú thêm (nếu có)..."></textarea>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn-secondary btn-close-modal">Hủy</button>
+                <button type="button" class="btn-primary" id="btn-save-task">Lưu Công Việc</button>
+            </div>
+        </div>
+
+        <div id="modal-task-detail" class="modal glass-panel hidden" style="width: 800px; max-width: 95vw;">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:20px; border-bottom: 1px solid var(--panel-border); padding-bottom: 15px;">
+                <div>
+                    <h3 id="detail-task-title" style="margin-bottom: 5px; border:none; padding:0;">Tiêu đề công việc</h3>
+                    <span id="detail-task-status" class="tag" style="margin:0;">Pending</span>
+                </div>
+                <button type="button" class="btn-icon btn-close-modal">✕</button>
+            </div>
+            <div class="task-detail-body" style="display:flex; flex-direction:column; gap:20px;">
+                <div class="detail-row">
+                    <label style="display:block; font-size: 0.75em; color: var(--text-secondary); margin-bottom: 5px; text-transform: uppercase;">Người thực hiện</label>
+                    <div id="detail-task-assignee" style="font-weight: 600; color: var(--accent-color);">---</div>
+                </div>
+                <div class="detail-row">
+                    <label style="display:block; font-size: 0.75em; color: var(--text-secondary); margin-bottom: 5px; text-transform: uppercase;">Người tạo</label>
+                    <div id="detail-task-creator" style="font-weight: 500;">---</div>
+                </div>
+                <div class="detail-row">
+                    <label style="display:block; font-size: 0.75em; color: var(--text-secondary); margin-bottom: 5px; text-transform: uppercase;">Ngày thực hiện</label>
+                    <div id="detail-task-date">---</div>
+                </div>
+                <div class="detail-row">
+                    <label style="display:block; font-size: 0.75em; color: var(--text-secondary); margin-bottom: 5px; text-transform: uppercase;">Mô tả nội dung</label>
+                    <div id="detail-task-desc" style="background: rgba(0,0,0,0.2); padding: 15px; border-radius: 8px; line-height: 1.6; white-space: pre-wrap;">---</div>
+                </div>
+            </div>
+            <div class="modal-actions" style="margin-top: 30px;">
+                <div id="admin-detail-actions" class="hidden" style="display:flex; gap:10px;">
+                    <button type="button" class="btn-secondary" id="btn-edit-task-from-detail">Sửa</button>
+                    <button type="button" class="btn-secondary btn-danger" id="btn-delete-task-from-detail">Xóa</button>
+                </div>
+                <button type="button" class="btn-primary" id="btn-toggle-status-from-detail">Đánh dấu hoàn thành</button>
+            </div>
+        </div>
+    </div>
+    <!-- Bắt buộc load JS phiên bản mới (Bypass Cache) -->
+    <script src="app.js?v=10.0.5"></script>
+</body>
+
+</html>
