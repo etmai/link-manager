@@ -16,9 +16,11 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-change-in-production';
 
+app.set('trust proxy', 1);
+
 // Security middleware
 app.use(helmet({
-    contentSecurityPolicy: false, // Disable for development
+    contentSecurityPolicy: false,
     crossOriginEmbedderPolicy: false
 }));
 app.use(cors());
@@ -26,15 +28,19 @@ app.use(express.json());
 
 // Rate limiting
 const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // limit each IP to 100 requests per windowMs
+    windowMs: 15 * 60 * 1000,
+    max: 1000,
+    standardHeaders: true,
+    legacyHeaders: false,
     message: { error: 'Quá nhiều yêu cầu, vui lòng thử lại sau.' }
 });
 app.use('/api/', limiter);
 
 const authLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 20, // limit each IP to 20 login attempts per windowMs
+    windowMs: 15 * 60 * 1000,
+    max: 50,
+    standardHeaders: true,
+    legacyHeaders: false,
     message: { error: 'Quá nhiều lần đăng nhập thất bại, vui lòng thử lại sau.' }
 });
 app.use('/api/auth/', authLimiter);
