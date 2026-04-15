@@ -393,9 +393,9 @@ async function loadAppData() {
         cachedMerchants = results[3];
         cachedSchedule = results[4];
         cachedSamples = results[5];
-        
+
         if (user && user.role === 'admin') {
-            cachedUsers = results[5];
+            cachedUsers = results[6];
             populateAdminControls();
         }
         
@@ -674,7 +674,7 @@ function setupEventListeners() {
     DOM.searchInput?.addEventListener('input', debounce(renderLinks, 300));
     DOM.sampleSearchInput?.addEventListener('input', debounce(renderSamplesTable, 300));
     
-    DOM.btnAddToday?.addEventListener('click', openAddTaskModal);
+    DOM.btnAddToday?.addEventListener('click', () => openAddTaskModal());
     DOM.btnSaveTask?.addEventListener('click', handleSaveTask);
     
     DOM.btnSidebarEdge?.addEventListener('click', () => {
@@ -1427,23 +1427,6 @@ function setupSalesListeners() {
 }
 
 // ====== OVERRIDE INIT TO INCLUDE NEW MODULES ======
-async function init() {
-    const user = getCurrentUser();
-    const token = localStorage.getItem('lm_token');
-    if (user && token) {
-        showDashboard(user);
-        await Promise.all([loadAppData(), loadSalesData()]);
-    } else {
-        showLogin();
-    }
-    setupEventListeners();
-    setupTabs();
-    setupGeneralManagementListeners();
-    setupSalesListeners();
-    const today = new Date().toISOString().split('T')[0];
-    DOM.linkDateInput.value = today;
-    document.getElementById('sales-date').value = today;
-}
 
 // ====== GENERAL MANAGEMENT RENDERERS ======
 
@@ -1815,6 +1798,27 @@ window.openTaskDetail = function(id) {
     openModal(DOM.modalTaskDetail);
 };
 
+function openAddTaskModal() {
+    const user = getCurrentUser();
+    DOM.taskIdInput.value = '';
+    DOM.taskDateInput.value = selectedDate;
+    DOM.taskTitleInput.value = '';
+    DOM.taskDescInput.value = '';
+
+    if (user && user.role === 'admin') {
+        DOM.assigneeGroup.classList.remove('hidden');
+        if (DOM.taskAssigneeInput.options.length > 0) {
+            DOM.taskAssigneeInput.value = DOM.taskAssigneeInput.options[0].value;
+        }
+    } else {
+        DOM.assigneeGroup.classList.add('hidden');
+    }
+
+    const header = document.getElementById('modal-task-header');
+    if (header) header.textContent = 'Thêm Công Việc Mới';
+    openModal(DOM.modalTask);
+}
+
 window.openEditTask = function(id) {
     const task = cachedSchedule.find(t => t.id === id);
     if (!task) return;
@@ -1955,23 +1959,6 @@ async function handleAddSample(e) {
     } catch (err) { showError(err.message); }
 }
 
-window.handleResetUserPassword = async function(username) {
-    const newPass = prompt(`Nhập mật khẩu mới cho user ${username}:`);
-    if (!newPass) return;
-    try {
-        await API.updateUserPassword(username, newPass);
-        alert('✅ Đã đổi mật khẩu thành công!');
-    } catch (err) { showError(err.message); }
-};
-
-window.handleDeleteUser = async function(username) {
-    if (!confirm(`Bạn có chắc muốn xóa tài khoản ${username}?`)) return;
-    try {
-        await API.deleteUser(username);
-        renderUsersTable();
-    } catch (err) { showError(err.message); }
-};
-
 window.handleEditSampleLink = async function(id, currentLink) {
     const newLink = prompt('Nhập Link Sản Phẩm mới:', currentLink === 'N/A' || !currentLink ? '' : currentLink);
     if (newLink === null) return;
@@ -1994,14 +1981,24 @@ window.handleDeleteSample = async function(id) {
 
 // Start app
 async function init() {
-    setupEventListeners();
     const user = getCurrentUser();
-    if (user) {
+    const token = localStorage.getItem('lm_token');
+
+    if (user && token) {
         showDashboard(user);
-        await loadAppData();
+        await Promise.all([loadAppData(), loadSalesData()]);
     } else {
+        logout();
         showLogin();
     }
+
+    setupEventListeners();
+    setupGeneralManagementListeners();
+    setupSalesListeners();
+
+    const today = new Date().toISOString().split('T')[0];
+    DOM.linkDateInput.value = today;
+    document.getElementById('sales-date').value = today;
 }
 
 init();
