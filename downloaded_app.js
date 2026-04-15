@@ -592,8 +592,6 @@ function setupEventListeners() {
         selectedScheduleUser = e.target.value;
         await loadScheduleData();
         renderSchedule();
-    });
-
     // --- EVENT DELEGATION: TOÀN BỘ SỰ KIỆN CLICK ---
     document.addEventListener('click', async (e) => {
         const target = e.target;
