@@ -508,6 +508,18 @@
                 <div class="modal-actions"><button type="button" class="btn-secondary btn-close-modal">Hủy</button><button type="submit" class="btn-primary">Lưu</button></div>
             </form>
         </div>
+        <div id="modal-edit-sample-link" class="modal glass-panel hidden" style="width: 480px; max-width: 95vw;">
+            <h3 id="modal-sample-link-header">Thêm Link Sản Phẩm</h3>
+            <input type="hidden" id="edit-sample-id">
+            <div class="input-group">
+                <label>Link Sản Phẩm</label>
+                <input type="text" id="edit-sample-link-url" placeholder="https://..." autocomplete="off">
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn-secondary btn-close-modal">Hủy</button>
+                <button type="button" class="btn-primary" id="btn-save-sample-link">Lưu</button>
+            </div>
+        </div>
         <div id="modal-edit-link" class="modal glass-panel hidden">
             <h3>Sửa Link</h3>
             <input type="hidden" id="edit-link-id">
@@ -574,7 +586,7 @@
         </div>
     </div>
     <!-- Bắt buộc load JS phiên bản mới (Bypass Cache) -->
-    <script src="app.js?v=10.1.0"></script>
+    <script src="app.js?v=10.2.0"></script>
 </body>
 
 </html>

@@ -275,6 +275,13 @@ const DOM = {
     sampleDesignIdInput: document.getElementById('sample-design-id'),
     sampleSearchInput: document.getElementById('sample-search-input'),
     sampleAdminColHead: document.getElementById('sample-admin-col-head'),
+
+    // Sample Link Modal
+    modalEditSampleLink: document.getElementById('modal-edit-sample-link'),
+    modalSampleLinkHeader: document.getElementById('modal-sample-link-header'),
+    editSampleId: document.getElementById('edit-sample-id'),
+    editSampleLinkUrl: document.getElementById('edit-sample-link-url'),
+    btnSaveSampleLink: document.getElementById('btn-save-sample-link'),
 };
 
 // ====== UTILS ======
@@ -565,6 +572,24 @@ function setupEventListeners() {
 
     // ---- EDIT LINK ----
     document.getElementById('btn-save-edit-link')?.addEventListener('click', saveEditedLink);
+
+    // ---- SAVE SAMPLE LINK ----
+    DOM.btnSaveSampleLink?.addEventListener('click', async () => {
+        const id = DOM.editSampleId.value;
+        const newLink = DOM.editSampleLinkUrl.value.trim();
+        if (!id) return;
+        try {
+            await API.updateSample(id, newLink);
+            cachedSamples = await API.getSamples();
+            DOM.modalOverlay.classList.add('hidden');
+            document.querySelectorAll('.modal').forEach(m => m.classList.add('hidden'));
+            renderSamplesTable();
+        } catch (err) { showError(err.message); }
+    });
+
+    DOM.editSampleLinkUrl?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') DOM.btnSaveSampleLink?.click();
+    });
 
     // ---- EXPORT ----
     DOM.btnExportExcel?.addEventListener('click', exportToCSV);
@@ -1959,15 +1984,13 @@ async function handleAddSample(e) {
     } catch (err) { showError(err.message); }
 }
 
-window.handleEditSampleLink = async function(id, currentLink) {
-    const newLink = prompt('Nhập Link Sản Phẩm mới:', currentLink === 'N/A' || !currentLink ? '' : currentLink);
-    if (newLink === null) return;
-    
-    try {
-        await API.updateSample(id, newLink);
-        cachedSamples = await API.getSamples();
-        renderSamplesTable();
-    } catch (err) { showError(err.message); }
+window.handleEditSampleLink = function(id, currentLink) {
+    const isAdd = !currentLink || currentLink === 'N/A';
+    DOM.modalSampleLinkHeader.textContent = isAdd ? 'Thêm Link Sản Phẩm' : 'Sửa Link Sản Phẩm';
+    DOM.editSampleId.value = id;
+    DOM.editSampleLinkUrl.value = isAdd ? '' : currentLink;
+    openModal(DOM.modalEditSampleLink);
+    setTimeout(() => DOM.editSampleLinkUrl.focus(), 100);
 };
 
 window.handleDeleteSample = async function(id) {
