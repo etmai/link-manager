@@ -135,6 +135,9 @@ const API = {
     async deleteSample(id) {
         return API.fetch(`/api/samples/${id}`, { method: 'DELETE' });
     },
+    async cleanupExpiredSamples() {
+        return API.fetch('/api/samples/cleanup-expired', { method: 'POST' });
+    },
 };
 
 // ====== APP STATE ======
@@ -193,6 +196,7 @@ const DOM = {
     btnChangePassword: document.getElementById('btn-change-password'),
     adminMenu: document.getElementById('admin-menu'),
     btnOpenUsers: document.getElementById('btn-open-users'),
+    btnCleanupSamples: document.getElementById('btn-cleanup-samples'),
 
     btnMobileMenu: document.getElementById('btn-mobile-menu'),
     sidebarOverlay: document.getElementById('sidebar-overlay'),
@@ -512,6 +516,20 @@ function setupEventListeners() {
         await renderUsersTable();
         openModal(DOM.modalUsers);
     });
+    
+    // ---- CLEANUP EXPIRED SAMPLES (ADMIN) ----
+    DOM.btnCleanupSamples?.addEventListener('click', async () => {
+        if (!confirm('Bạn có muốn xóa tất cả các yêu cầu mẫu đã hết hạn không?')) return;
+        try {
+            const result = await API.cleanupExpiredSamples();
+            alert(`✅ ${result.message}`);
+            cachedSamples = await API.getSamples();
+            renderSamplesTable();
+        } catch (err) {
+            showError(err.message);
+        }
+    });
+    
     document.getElementById('add-user-form')?.addEventListener('submit', async (e) => {
         e.preventDefault();
         const u = document.getElementById('new-user-name').value.trim();
