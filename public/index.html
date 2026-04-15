@@ -521,6 +521,30 @@
                 <button type="button" class="btn-primary" id="btn-save-sample-link">Lưu</button>
             </div>
         </div>
+        <div id="modal-reset-password" class="modal glass-panel hidden" style="width: 400px; max-width: 95vw;">
+            <h3>Reset Mật Khẩu</h3>
+            <p id="modal-reset-pass-desc" style="font-size:0.9em; color:var(--text-secondary); margin-bottom:12px;"></p>
+            <input type="hidden" id="reset-pass-username">
+            <div class="input-group">
+                <label>Mật khẩu mới</label>
+                <input type="password" id="reset-pass-new" placeholder="Nhập mật khẩu mới..." autocomplete="new-password">
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn-secondary btn-close-modal">Hủy</button>
+                <button type="button" class="btn-primary" id="btn-confirm-reset-pass">Xác Nhận</button>
+            </div>
+        </div>
+
+        <div id="modal-confirm-delete" class="modal glass-panel hidden" style="width: 380px; max-width: 95vw;">
+            <h3>Xác Nhận Xóa</h3>
+            <p id="modal-confirm-delete-msg" style="font-size:0.95em; margin-bottom:16px;"></p>
+            <input type="hidden" id="confirm-delete-id">
+            <div class="modal-actions">
+                <button type="button" class="btn-secondary btn-close-modal">Hủy</button>
+                <button type="button" class="btn-danger" id="btn-confirm-delete">Xóa</button>
+            </div>
+        </div>
+
         <div id="modal-edit-link" class="modal glass-panel hidden">
             <h3>Sửa Link</h3>
             <input type="hidden" id="edit-link-id">
@@ -587,7 +611,7 @@
         </div>
     </div>
     <!-- Bắt buộc load JS phiên bản mới (Bypass Cache) -->
-    <script src="app.js?v=10.3.0"></script>
+    <script src="app.js?v=10.4.0"></script>
 </body>
 
 </html>

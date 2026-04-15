@@ -281,6 +281,19 @@ const DOM = {
     modalSampleLinkHeader: document.getElementById('modal-sample-link-header'),
     editSampleId: document.getElementById('edit-sample-id'),
     editSampleLinkUrl: document.getElementById('edit-sample-link-url'),
+
+    // Reset Password Modal
+    modalResetPassword: document.getElementById('modal-reset-password'),
+    resetPassUsername: document.getElementById('reset-pass-username'),
+    resetPassNew: document.getElementById('reset-pass-new'),
+    resetPassDesc: document.getElementById('modal-reset-pass-desc'),
+    btnConfirmResetPass: document.getElementById('btn-confirm-reset-pass'),
+
+    // Confirm Delete Modal
+    modalConfirmDelete: document.getElementById('modal-confirm-delete'),
+    confirmDeleteId: document.getElementById('confirm-delete-id'),
+    confirmDeleteMsg: document.getElementById('modal-confirm-delete-msg'),
+    btnConfirmDelete: document.getElementById('btn-confirm-delete'),
     btnSaveSampleLink: document.getElementById('btn-save-sample-link'),
 };
 
@@ -317,8 +330,32 @@ function normalizeUrl(urlStr) {
     }
 }
 
+function showToast(msg, type = 'error') {
+    let container = document.getElementById('toast-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'toast-container';
+        container.style.cssText = 'position:fixed;top:20px;right:20px;z-index:99999;display:flex;flex-direction:column;gap:10px;';
+        document.body.appendChild(container);
+    }
+    const toast = document.createElement('div');
+    const bg = type === 'success' ? '#16a34a' : type === 'info' ? '#2563eb' : '#dc2626';
+    toast.style.cssText = `background:${bg};color:#fff;padding:12px 18px;border-radius:10px;font-size:0.92em;max-width:320px;box-shadow:0 4px 16px rgba(0,0,0,0.25);opacity:0;transform:translateX(40px);transition:all 0.25s ease;`;
+    toast.textContent = msg;
+    container.appendChild(toast);
+    requestAnimationFrame(() => { toast.style.opacity = '1'; toast.style.transform = 'translateX(0)'; });
+    setTimeout(() => {
+        toast.style.opacity = '0'; toast.style.transform = 'translateX(40px)';
+        setTimeout(() => toast.remove(), 300);
+    }, 3500);
+}
+
 function showError(msg) {
-    alert(`❌ ${msg}`);
+    showToast(msg, 'error');
+}
+
+function showSuccess(msg) {
+    showToast(msg, 'success');
 }
 
 function getUserColor(username) {
@@ -533,10 +570,9 @@ function setupEventListeners() {
     
     // ---- CLEANUP EXPIRED SAMPLES (ADMIN) ----
     DOM.btnCleanupSamples?.addEventListener('click', async () => {
-        if (!confirm('Bạn có muốn xóa link của tất cả các mẫu đã hết hạn? (Mẫu vẫn được giữ lại)')) return;
         try {
             const result = await API.cleanupExpiredSamples();
-            alert(`✅ ${result.message}`);
+            showSuccess(result.message);
             cachedSamples = (await API.getSamples()) || [];
             renderSamplesTable();
         } catch (err) {
@@ -544,6 +580,35 @@ function setupEventListeners() {
         }
     });
     
+    // ---- RESET PASSWORD MODAL ----
+    DOM.btnConfirmResetPass?.addEventListener('click', async () => {
+        const username = DOM.resetPassUsername.value;
+        const newP = DOM.resetPassNew.value.trim();
+        if (!newP) { showError('Vui lòng nhập mật khẩu mới!'); return; }
+        try {
+            await API.resetUserPassword(username, newP);
+            closeAllModals();
+            DOM.resetPassNew.value = '';
+            showSuccess(`Đã reset mật khẩu cho ${username} thành công!`);
+        } catch (err) { showError(err.message); }
+    });
+
+    DOM.resetPassNew?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') DOM.btnConfirmResetPass?.click();
+    });
+
+    // ---- CONFIRM DELETE MODAL ----
+    DOM.btnConfirmDelete?.addEventListener('click', async () => {
+        const id = DOM.confirmDeleteId.value;
+        if (!id) return;
+        try {
+            await API.deleteSample(id);
+            cachedSamples = (await API.getSamples()) || [];
+            closeAllModals();
+            renderSamplesTable();
+        } catch (err) { showError(err.message); }
+    });
+
     document.getElementById('add-user-form')?.addEventListener('submit', async (e) => {
         e.preventDefault();
         const u = document.getElementById('new-user-name').value.trim();
@@ -747,13 +812,12 @@ window.handleDeleteUser = async function(username) {
     } catch (err) { showError(err.message); }
 };
 
-window.handleResetUserPassword = async function(username) {
-    const newP = prompt(`Nhập mật khẩu mới cho user ${username}:`);
-    if (!newP) return;
-    try {
-        await API.resetUserPassword(username, newP);
-        alert(`✅ Đã reset mật khẩu cho ${username} thành công!`);
-    } catch (err) { showError(err.message); }
+window.handleResetUserPassword = function(username) {
+    DOM.resetPassUsername.value = username;
+    DOM.resetPassNew.value = '';
+    DOM.resetPassDesc.textContent = `Nhập mật khẩu mới cho tài khoản: ${username}`;
+    openModal(DOM.modalResetPassword);
+    setTimeout(() => DOM.resetPassNew.focus(), 100);
 };
 
 // ====== LOGIC: CATEGORIES ======
@@ -2000,13 +2064,12 @@ window.handleEditSampleLink = function(id, currentLink) {
     setTimeout(() => DOM.editSampleLinkUrl.focus(), 100);
 };
 
-window.handleDeleteSample = async function(id) {
-    if (!window.confirm('Bạn có chắc muốn xóa yêu cầu này?')) return;
-    try {
-        await API.deleteSample(id);
-        cachedSamples = (await API.getSamples()) || [];
-        renderSamplesTable();
-    } catch (err) { showError(err.message); }
+window.handleDeleteSample = function(id) {
+    const sample = cachedSamples.find(s => s.id === id);
+    const label = sample ? `mẫu "${sample.designId}"` : 'yêu cầu này';
+    DOM.confirmDeleteId.value = id;
+    DOM.confirmDeleteMsg.textContent = `Bạn có chắc muốn xóa ${label}? Hành động này không thể hoàn tác.`;
+    openModal(DOM.modalConfirmDelete);
 };
 
 // Start app
