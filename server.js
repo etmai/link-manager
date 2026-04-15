@@ -773,6 +773,33 @@ app.delete('/api/samples/:id', authenticateToken, async (req, res) => {
     res.json({ success: true });
 });
 
+// Request link for expired/process samples (user can request, admin will review)
+app.post('/api/samples/:id/request', authenticateToken, async (req, res) => {
+    const { id } = req.params;
+    const entry = await db.get('SELECT * FROM sample_requests WHERE id = ?', [id]);
+    if (!entry) return res.status(404).json({ error: 'Không tìm thấy yêu cầu!' });
+    
+    // Only the requester or admin can request a new link
+    if (req.user.role !== 'admin' && entry.requester !== req.user.username) {
+        return res.status(403).json({ error: 'Bạn không có quyền yêu cầu link cho mẫu này!' });
+    }
+    
+    // Check if already expired or in Process status
+    const today = new Date().toISOString().split('T')[0];
+    const isExpired = entry.expiryDate !== 'N/A' && entry.expiryDate < today;
+    
+    if (entry.status === 'Process' || isExpired) {
+        // Mark as needing attention - reset to Process status with note
+        await db.run(
+            'UPDATE sample_requests SET status = ?, productLink = ?, expiryDate = ? WHERE id = ?',
+            ['Process - Pending Review', 'N/A', 'N/A', id]
+        );
+        res.json({ success: true, message: 'Yêu cầu đã được gửi. Admin sẽ xem xét sớm.' });
+    } else {
+        return res.status(400).json({ error: 'Mẫu này vẫn còn hạn và không cần yêu cầu link mới.' });
+    }
+});
+
 // Auto-delete expired samples (API endpoint for manual trigger or cron job)
 app.post('/api/samples/cleanup-expired', authenticateToken, requireAdmin, async (req, res) => {
     try {

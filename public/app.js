@@ -135,6 +135,9 @@ const API = {
     async deleteSample(id) {
         return API.fetch(`/api/samples/${id}`, { method: 'DELETE' });
     },
+    async requestLink(id) {
+        return API.fetch(`/api/samples/${id}/request`, { method: 'POST' });
+    },
     async cleanupExpiredSamples() {
         return API.fetch('/api/samples/cleanup-expired', { method: 'POST' });
     },
@@ -449,15 +452,22 @@ function setupEventListeners() {
         e.preventDefault();
         const u = DOM.usernameInput.value.trim();
         const p = DOM.passwordInput.value;
+        
+        if (!u || !p) {
+            showError('Vui lòng nhập tên đăng nhập và mật khẩu!');
+            return;
+        }
+        
         try {
             const data = await API.login(u, p);
             localStorage.setItem('lm_token', data.token);
             setCurrentUser(data.user);
             showDashboard(data.user);
+            DOM.usernameInput.value = '';
             DOM.passwordInput.value = '';
             await loadAppData();
         } catch (err) {
-            showError(err.message);
+            showError('❌ Tên đăng nhập hoặc mật khẩu không đúng!');
         }
     });
 
@@ -633,10 +643,13 @@ function setupEventListeners() {
             if (id) window.handleDeleteLink(id);
         }
 
-        // 3. TAB: SAMPLES (Add/Sửa/Xóa)
+        // 3. TAB: SAMPLES (Add/Sửa/Xóa/Request)
         else if (btn.classList.contains('btn-add-link') || btn.classList.contains('btn-edit-sample')) {
             const link = btn.getAttribute('data-link') || 'N/A';
             if (id) window.handleEditSampleLink(id, link);
+        } else if (btn.classList.contains('btn-request-link')) {
+            // User clicked Request button for expired/process samples
+            if (id) window.handleRequestLink(id);
         } else if (btn.classList.contains('btn-delete-sample')) {
             if (id) window.handleDeleteSample(id);
         }
@@ -662,9 +675,7 @@ function setupEventListeners() {
     // --- EVENT DELEGATION: FORM SUBMIT ---
     document.addEventListener('submit', async (e) => {
         const form = e.target;
-        if (form.id === 'login-form') {
-            handleLogin(e);
-        } else if (form.id === 'add-link-form') {
+        if (form.id === 'add-link-form') {
             handleSaveLinks(e);
         } else if (form.id === 'add-sample-form') {
             handleAddSample(e);
@@ -1902,16 +1913,34 @@ async function renderSamplesTable() {
         return designId.toLowerCase().includes(searchKey);
     });
 
+    // Helper function to check if sample is expired
+    function isExpired(expiryDate) {
+        if (!expiryDate || expiryDate === 'N/A') return false;
+        const today = new Date().toISOString().split('T')[0];
+        return expiryDate < today;
+    }
+
     filtered.forEach(s => {
         const tr = document.createElement('tr');
         const statusClass = s.status === 'Process' ? 'tag-warning' : (s.status === 'Live' ? 'tag-success' : '');
+        const expired = isExpired(s.expiryDate);
         
         let linkDisplay = '';
-        if (s.productLink && s.productLink !== 'N/A') {
+        if (s.productLink && s.productLink !== 'N/A' && !expired) {
+            // Status is Live and not expired - show link
             linkDisplay = `<a href="${s.productLink}" target="_blank" title="${s.productLink}" style="font-size: 1.4em; text-decoration: none;">🔗</a>`;
-        } else {
+        } else if (expired || s.status === 'Process') {
+            // Expired or Process - show button based on role
             if (isAdmin) {
-                linkDisplay = `<button class="btn-small btn-primary btn-add-link" data-id="${s.id}" data-link="N/A">➕ Add</button>`;
+                linkDisplay = `<button class="btn-small btn-primary btn-add-link" data-id="${s.id}" data-link="${s.productLink || 'N/A'}">➕ Add</button>`;
+            } else {
+                // User role - show Request button
+                linkDisplay = `<button class="btn-small btn-warning btn-request-link" data-id="${s.id}">📩 Request</button>`;
+            }
+        } else {
+            // Fallback
+            if (isAdmin) {
+                linkDisplay = `<button class="btn-small btn-primary btn-add-link" data-id="${s.id}" data-link="${s.productLink || 'N/A'}">➕ Add</button>`;
             } else {
                 linkDisplay = `<span style="opacity:0.5">${s.productLink || 'N/A'}</span>`;
             }
@@ -1933,9 +1962,9 @@ async function renderSamplesTable() {
             <td><span class="date-text">${s.requestDate}</span></td>
             <td style="font-weight:600; color:var(--accent-color);">${s.designId}</td>
             <td>${s.requester}</td>
-            <td><span class="tag ${statusClass}">${s.status}</span></td>
+            <td><span class="tag ${statusClass}">${expired ? 'Hết Hạn' : s.status}</span></td>
             <td style="max-width:250px; overflow:hidden; text-overflow:ellipsis;">${linkDisplay}</td>
-            <td>${s.expiryDate}</td>
+            <td>${expired ? '<span style="color:red;font-weight:bold;">' + s.expiryDate + '</span>' : s.expiryDate}</td>
             ${isAdmin || (user && s.requester === user.username) ? adminActions : ''}
         `;
         
@@ -1988,6 +2017,16 @@ window.handleDeleteSample = async function(id) {
     if (!confirm('Bạn có chắc muốn xóa yêu cầu này?')) return;
     try {
         await API.deleteSample(id);
+        cachedSamples = await API.getSamples();
+        renderSamplesTable();
+    } catch (err) { showError(err.message); }
+};
+
+window.handleRequestLink = async function(id) {
+    if (!confirm('Bạn có chắc muốn gửi yêu cầu cấp link mới cho mẫu này?')) return;
+    try {
+        await API.requestLink(id);
+        alert('✅ Yêu cầu đã được gửi thành công! Admin sẽ xem xét và thêm link sớm.');
         cachedSamples = await API.getSamples();
         renderSamplesTable();
     } catch (err) { showError(err.message); }
