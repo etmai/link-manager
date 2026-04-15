@@ -393,13 +393,13 @@ async function loadAppData() {
         }
 
         const results = await Promise.all(promises);
-        
-        cachedLinks = results[0];
-        cachedCategories = results[1];
-        cachedAccounts = results[2];
-        cachedMerchants = results[3];
-        cachedSchedule = results[4];
-        cachedSamples = results[5];
+
+        cachedLinks = results[0] || [];
+        cachedCategories = results[1] || [];
+        cachedAccounts = results[2] || [];
+        cachedMerchants = results[3] || [];
+        cachedSchedule = results[4] || [];
+        cachedSamples = results[5] || [];
 
         if (user && user.role === 'admin') {
             cachedUsers = results[6];
@@ -456,15 +456,22 @@ function setupEventListeners() {
         e.preventDefault();
         const u = DOM.usernameInput.value.trim();
         const p = DOM.passwordInput.value;
+        const loginError = document.getElementById('login-error');
+        if (loginError) loginError.classList.add('hidden');
         try {
             const data = await API.login(u, p);
             localStorage.setItem('lm_token', data.token);
             setCurrentUser(data.user);
             showDashboard(data.user);
             DOM.passwordInput.value = '';
-            await loadAppData();
+            await Promise.all([loadAppData(), loadSalesData()]);
         } catch (err) {
-            showError(err.message);
+            if (loginError) {
+                loginError.textContent = err.message || 'Tên đăng nhập hoặc mật khẩu không đúng!';
+                loginError.classList.remove('hidden');
+            } else {
+                showError(err.message);
+            }
         }
     });
 
@@ -526,11 +533,11 @@ function setupEventListeners() {
     
     // ---- CLEANUP EXPIRED SAMPLES (ADMIN) ----
     DOM.btnCleanupSamples?.addEventListener('click', async () => {
-        if (!confirm('Bạn có muốn xóa tất cả các yêu cầu mẫu đã hết hạn không?')) return;
+        if (!confirm('Bạn có muốn xóa link của tất cả các mẫu đã hết hạn? (Mẫu vẫn được giữ lại)')) return;
         try {
             const result = await API.cleanupExpiredSamples();
             alert(`✅ ${result.message}`);
-            cachedSamples = await API.getSamples();
+            cachedSamples = (await API.getSamples()) || [];
             renderSamplesTable();
         } catch (err) {
             showError(err.message);
@@ -1994,10 +2001,10 @@ window.handleEditSampleLink = function(id, currentLink) {
 };
 
 window.handleDeleteSample = async function(id) {
-    if (!confirm('Bạn có chắc muốn xóa yêu cầu này?')) return;
+    if (!window.confirm('Bạn có chắc muốn xóa yêu cầu này?')) return;
     try {
         await API.deleteSample(id);
-        cachedSamples = await API.getSamples();
+        cachedSamples = (await API.getSamples()) || [];
         renderSamplesTable();
     } catch (err) { showError(err.message); }
 };
