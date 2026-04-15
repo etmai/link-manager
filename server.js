@@ -2,16 +2,43 @@ const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
 const { open } = require('sqlite');
 const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
 const path = require('path');
 const { URL, URLSearchParams } = require('url');
 const https = require('https');
 const http = require('http');
+const rateLimit = require('express-rate-limit');
+const helmet = require('helmet');
+const cors = require('cors');
+require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const JWT_SECRET = 'super-secret-key-link-manager-v4'; // Key bảo mật token
+const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-change-in-production';
 
+// Security middleware
+app.use(helmet({
+    contentSecurityPolicy: false, // Disable for development
+    crossOriginEmbedderPolicy: false
+}));
+app.use(cors());
 app.use(express.json());
+
+// Rate limiting
+const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // limit each IP to 100 requests per windowMs
+    message: { error: 'Quá nhiều yêu cầu, vui lòng thử lại sau.' }
+});
+app.use('/api/', limiter);
+
+const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 20, // limit each IP to 20 login attempts per windowMs
+    message: { error: 'Quá nhiều lần đăng nhập thất bại, vui lòng thử lại sau.' }
+});
+app.use('/api/auth/', authLimiter);
+
 // Định tuyến trỏ HTML/CSS/JS thuần từ folder public
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -132,7 +159,9 @@ async function initDb() {
     // Check if admin exists
     const admin = await db.get('SELECT * FROM users WHERE username = ?', ['admin']);
     if (!admin) {
-        await db.run('INSERT INTO users (username, password, role) VALUES (?, ?, ?)', ['admin', 'Hello0', 'admin']);
+        // Hash password before storing
+        const hashedPassword = await bcrypt.hash('Hello0', 10);
+        await db.run('INSERT INTO users (username, password, role) VALUES (?, ?, ?)', ['admin', hashedPassword, 'admin']);
     }
 
     // Default categories
@@ -195,9 +224,9 @@ function requireAdmin(req, res, next) {
 // AUTH
 app.post('/api/auth/login', async (req, res) => {
     const { username, password } = req.body;
-    const user = await db.get('SELECT * FROM users WHERE username = ? AND password = ?', [username, password]);
+    const user = await db.get('SELECT * FROM users WHERE username = ?', [username]);
     
-    if (user) {
+    if (user && await bcrypt.compare(password, user.password)) {
         const token = jwt.sign({ username: user.username, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
         res.json({ token, user: { username: user.username, role: user.role } });
     } else {
@@ -209,10 +238,12 @@ app.post('/api/auth/change-password', authenticateToken, async (req, res) => {
     const { oldPassword, newPassword } = req.body;
     const user = await db.get('SELECT * FROM users WHERE username = ?', [req.user.username]);
     
-    if (user.password !== oldPassword) {
+    if (!(await bcrypt.compare(oldPassword, user.password))) {
         return res.status(400).json({ error: "Mật khẩu cũ không chính xác!" });
     }
-    await db.run('UPDATE users SET password = ? WHERE username = ?', [newPassword, req.user.username]);
+    // Hash new password before storing
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    await db.run('UPDATE users SET password = ? WHERE username = ?', [hashedPassword, req.user.username]);
     res.json({ success: true });
 });
 
@@ -227,7 +258,9 @@ app.post('/api/users', authenticateToken, requireAdmin, async (req, res) => {
     const exists = await db.get('SELECT * FROM users WHERE username = ?', [username]);
     if (exists) return res.status(400).json({ error: "Tên đăng nhập đã tồn tại!" });
     
-    await db.run('INSERT INTO users (username, password, role) VALUES (?, ?, ?)', [username, password, role]);
+    // Hash password before storing
+    const hashedPassword = await bcrypt.hash(password, 10);
+    await db.run('INSERT INTO users (username, password, role) VALUES (?, ?, ?)', [username, hashedPassword, role]);
     res.json({ success: true });
 });
 
@@ -253,7 +286,9 @@ app.post('/api/users/:username/reset-password', authenticateToken, requireAdmin,
     const exists = await db.get('SELECT * FROM users WHERE username = ?', [username]);
     if (!exists) return res.status(404).json({ error: "Người dùng không tồn tại!" });
     
-    await db.run('UPDATE users SET password = ? WHERE username = ?', [newPassword, username]);
+    // Hash new password before storing
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    await db.run('UPDATE users SET password = ? WHERE username = ?', [hashedPassword, username]);
     res.json({ success: true });
 });
 
@@ -331,29 +366,38 @@ app.post('/api/links/batch', authenticateToken, async (req, res) => {
     let newCount = 0;
     let forbiddenCount = 0;
     
-    for (const data of linksData) {
-        const normalizedInput = normalizeUrl(data.url);
-        const existingIndex = dbLinks.findIndex(l => normalizeUrl(l.url) === normalizedInput);
-        if (existingIndex !== -1 && forceSaveCheckbox) {
-            // MERGE (Update existing)
-            const existing = dbLinks[existingIndex];
-            
-            // Check permission: Admin or Creator
-            if (req.user.role === 'admin' || existing.addedBy === req.user.username) {
-                const mergedCats = [...new Set([...existing.categories, ...data.categories])];
-                await db.run('UPDATE links SET date = ?, categories = ?, updatedAt = ?, updatedBy = ? WHERE id = ?', 
-                    [data.date, JSON.stringify(mergedCats), new Date().toISOString(), req.user.username, existing.id]);
-                updatedCount++;
-            } else {
-                forbiddenCount++;
+    // Use transaction for batch operations
+    await db.run('BEGIN TRANSACTION');
+    try {
+        for (const data of linksData) {
+            const normalizedInput = normalizeUrl(data.url);
+            const existingIndex = dbLinks.findIndex(l => normalizeUrl(l.url) === normalizedInput);
+            if (existingIndex !== -1 && forceSaveCheckbox) {
+                // MERGE (Update existing)
+                const existing = dbLinks[existingIndex];
+                
+                // Check permission: Admin or Creator
+                if (req.user.role === 'admin' || existing.addedBy === req.user.username) {
+                    const mergedCats = [...new Set([...existing.categories, ...data.categories])];
+                    await db.run('UPDATE links SET date = ?, categories = ?, updatedAt = ?, updatedBy = ? WHERE id = ?', 
+                        [data.date, JSON.stringify(mergedCats), new Date().toISOString(), req.user.username, existing.id]);
+                    updatedCount++;
+                } else {
+                    forbiddenCount++;
+                }
+            } else if (existingIndex === -1) {
+                // NEW
+                const newId = Date.now().toString() + Math.random().toString(36).substr(2, 5);
+                await db.run('INSERT INTO links (id, url, date, categories, createdAt, addedBy) VALUES (?, ?, ?, ?, ?, ?)',
+                    [newId, data.url, data.date, JSON.stringify(data.categories), new Date().toISOString(), req.user.username]);
+                newCount++;
             }
-        } else if (existingIndex === -1) {
-            // NEW
-            const newId = Date.now().toString() + Math.random().toString(36).substr(2, 5);
-            await db.run('INSERT INTO links (id, url, date, categories, createdAt, addedBy) VALUES (?, ?, ?, ?, ?, ?)',
-                [newId, data.url, data.date, JSON.stringify(data.categories), new Date().toISOString(), req.user.username]);
-            newCount++;
         }
+        await db.run('COMMIT');
+    } catch (error) {
+        await db.run('ROLLBACK');
+        console.error('Batch operation failed:', error);
+        return res.status(500).json({ error: 'Không thể thực hiện thao tác batch. Đã rollback.' });
     }
     
     res.json({ newCount, updatedCount, forbiddenCount });
@@ -471,11 +515,19 @@ app.post('/api/sales', authenticateToken, requireAdmin, async (req, res) => {
     }
 
     const id = Date.now().toString() + Math.random().toString(36).substr(2, 5);
-    await db.run(
-        'INSERT INTO sales_entries (id, account, sku, title, merchant, category, sales, date, createdAt, addedBy) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [id, account.trim(), sku.trim().toUpperCase(), title || '', merchant.trim(), category.trim(), parseInt(sales), date, new Date().toISOString(), req.user.username]
-    );
-    res.json({ success: true, id });
+    await db.run('BEGIN TRANSACTION');
+    try {
+        await db.run(
+            'INSERT INTO sales_entries (id, account, sku, title, merchant, category, sales, date, createdAt, addedBy) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [id, account.trim(), sku.trim().toUpperCase(), title || '', merchant.trim(), category.trim(), parseInt(sales), date, new Date().toISOString(), req.user.username]
+        );
+        await db.run('COMMIT');
+        res.json({ success: true, id });
+    } catch (error) {
+        await db.run('ROLLBACK');
+        console.error('Sales insert failed:', error);
+        res.status(500).json({ error: 'Không thể thêm bản ghi sales.' });
+    }
 });
 
 // PUT: Cập nhật bản ghi sales (Admin only)
@@ -486,11 +538,19 @@ app.put('/api/sales/:id', authenticateToken, requireAdmin, async (req, res) => {
     const entry = await db.get('SELECT * FROM sales_entries WHERE id = ?', [id]);
     if (!entry) return res.status(404).json({ error: 'Không tìm thấy bản ghi!' });
 
-    await db.run(
-        'UPDATE sales_entries SET account=?, sku=?, title=?, merchant=?, category=?, sales=?, date=? WHERE id=?',
-        [account, sku.toUpperCase(), title || '', merchant, category, parseInt(sales), date, id]
-    );
-    res.json({ success: true });
+    await db.run('BEGIN TRANSACTION');
+    try {
+        await db.run(
+            'UPDATE sales_entries SET account=?, sku=?, title=?, merchant=?, category=?, sales=?, date=? WHERE id=?',
+            [account, sku.toUpperCase(), title || '', merchant, category, parseInt(sales), date, id]
+        );
+        await db.run('COMMIT');
+        res.json({ success: true });
+    } catch (error) {
+        await db.run('ROLLBACK');
+        console.error('Sales update failed:', error);
+        res.status(500).json({ error: 'Không thể cập nhật bản ghi sales.' });
+    }
 });
 
 // DELETE: Xóa bản ghi sales (Admin only)
