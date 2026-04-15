@@ -772,7 +772,80 @@ app.delete('/api/samples/:id', authenticateToken, async (req, res) => {
     await db.run('DELETE FROM sample_requests WHERE id = ?', [id]);
     res.json({ success: true });
 });
+
+// Auto-delete expired samples (API endpoint for manual trigger or cron job)
+app.post('/api/samples/cleanup-expired', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const today = new Date().toISOString().split('T')[0];
+        
+        // Find all expired samples (expiryDate < today and expiryDate != 'N/A')
+        const expiredSamples = await db.all(
+            'SELECT * FROM sample_requests WHERE expiryDate != ? AND expiryDate < ?',
+            ['N/A', today]
+        );
+        
+        if (expiredSamples.length === 0) {
+            return res.json({ deletedCount: 0, message: 'Không có mẫu nào hết hạn.' });
+        }
+        
+        // Delete expired samples
+        const deletePromises = expiredSamples.map(sample => 
+            db.run('DELETE FROM sample_requests WHERE id = ?', [sample.id])
+        );
+        await Promise.all(deletePromises);
+        
+        console.log(`Auto-deleted ${expiredSamples.length} expired sample requests.`);
+        res.json({ 
+            deletedCount: expiredSamples.length, 
+            message: `Đã xóa ${expiredSamples.length} yêu cầu mẫu hết hạn.`,
+            deletedSamples: expiredSamples.map(s => ({ id: s.id, designId: s.designId, expiryDate: s.expiryDate }))
+        });
+    } catch (error) {
+        console.error('Cleanup expired samples failed:', error);
+        res.status(500).json({ error: 'Không thể xóa các mẫu hết hạn.' });
+    }
+});
+// Auto-delete expired samples on server startup and every 24 hours
+async function cleanupExpiredSamples() {
+    try {
+        const today = new Date().toISOString().split('T')[0];
+        
+        // Find all expired samples (expiryDate < today and expiryDate != 'N/A')
+        const expiredSamples = await db.all(
+            'SELECT * FROM sample_requests WHERE expiryDate != ? AND expiryDate < ?',
+            ['N/A', today]
+        );
+        
+        if (expiredSamples.length === 0) {
+            console.log('No expired samples to clean up.');
+            return;
+        }
+        
+        // Delete expired samples using transaction
+        await db.run('BEGIN TRANSACTION');
+        try {
+            const deletePromises = expiredSamples.map(sample => 
+                db.run('DELETE FROM sample_requests WHERE id = ?', [sample.id])
+            );
+            await Promise.all(deletePromises);
+            await db.run('COMMIT');
+            console.log(`✅ Auto-deleted ${expiredSamples.length} expired sample requests.`);
+        } catch (error) {
+            await db.run('ROLLBACK');
+            console.error('Cleanup transaction failed:', error);
+        }
+    } catch (error) {
+        console.error('Cleanup expired samples failed:', error);
+    }
+}
+
 initDb().then(() => {
+    // Run cleanup on startup
+    cleanupExpiredSamples();
+    
+    // Schedule cleanup every 24 hours (at midnight)
+    setInterval(cleanupExpiredSamples, 24 * 60 * 60 * 1000);
+    
     app.listen(PORT, () => {
         console.log(`Node Server is running on port ${PORT}`);
     });
