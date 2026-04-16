@@ -747,7 +747,7 @@ function setupEventListeners() {
         }
 
         const taskBtn = target.closest('.btn-icon');
-        if (taskBtn && taskBtn.closest('.day-tasks')) {
+        if (taskBtn && (taskBtn.closest('.day-tasks') || taskBtn.closest('.task-actions'))) {
             const taskId = taskBtn.dataset.id;
             const action = taskBtn.dataset.action;
             if (action === 'edit') window.openEditTask(taskId);
