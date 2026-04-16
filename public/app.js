@@ -9,7 +9,7 @@ const API = {
 
         const res = await fetch(path, { ...options, headers });
 
-        if (res.status === 401) { logout(); return null; }
+        if (res.status === 401) { logout(); throw new Error('Phiên đăng nhập hết hạn, vui lòng đăng nhập lại!'); }
 
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || `Lỗi API: ${res.status}`);
@@ -1306,8 +1306,9 @@ async function handleAddSales(e) {
 
     if (!account) { showError('Vui lòng chọn Account!'); return; }
     if (!sku) { showError('Vui lòng nhập mã SKU!'); return; }
+    if (!date) { showError('Vui lòng chọn Ngày!'); return; }
 
-    const payload = { account, fulfillment, design_id, sku, title, ord_id, custom, size, filename, sales, date };
+    const payload = { account: account.trim(), fulfillment, design_id, sku, title, ord_id, custom, size, filename, sales, date };
     const editId = document.getElementById('edit-sales-id-inline').value;
 
     try {
@@ -1399,7 +1400,14 @@ window.openEditSales = function(id) {
     if (!entry) return;
 
     document.getElementById('edit-sales-id-inline').value = entry.id;
-    document.getElementById('sales-account').value = entry.account;
+    const accSel = document.getElementById('sales-account');
+    if (entry.account && ![...accSel.options].some(o => o.value === entry.account)) {
+        const opt = document.createElement('option');
+        opt.value = entry.account;
+        opt.textContent = entry.account;
+        accSel.appendChild(opt);
+    }
+    accSel.value = entry.account;
     document.getElementById('sales-fulfillment').value = entry.fulfillment || '';
     document.getElementById('sales-design-id').value = entry.design_id || '';
     document.getElementById('sales-sku').value = entry.sku;

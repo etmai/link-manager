@@ -539,7 +539,8 @@ app.post('/api/sales', authenticateToken, requireAdmin, async (req, res) => {
     const salesNum = parseInt(body.sales ?? 0) || 0;
 
     if (!account || !sku || !date) {
-        return res.status(400).json({ error: `Thiếu thông tin bắt buộc! (account="${account}", sku="${sku}", date="${date}")` });
+        const missing = [!account && 'Account', !sku && 'SKU', !date && 'Ngày'].filter(Boolean).join(', ');
+        return res.status(400).json({ error: `Thiếu thông tin bắt buộc: ${missing}` });
     }
 
     const id = Date.now().toString() + Math.random().toString(36).substr(2, 5);
