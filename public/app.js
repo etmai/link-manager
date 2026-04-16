@@ -2003,17 +2003,20 @@ async function renderSamplesTable() {
 
     filtered.forEach(s => {
         const tr = document.createElement('tr');
-        const statusClass = s.status === 'Process' ? 'tag-warning' : (s.status === 'Live' ? 'tag-success' : '');
-        
-        let linkDisplay = '';
-        if (s.productLink && s.productLink !== 'N/A') {
-            linkDisplay = `<a href="${s.productLink}" target="_blank" title="${s.productLink}" style="font-size: 1.4em; text-decoration: none;">🔗</a>`;
-        } else {
+        const hasLink = s.productLink && s.productLink !== 'N/A';
+
+        let statusCell = '';
+        if (hasLink) {
+            statusCell = `<a href="${s.productLink}" target="_blank" title="${s.productLink}" style="font-size: 1.4em; text-decoration: none; display:inline-flex; align-items:center;">🔗</a>`;
+        } else if (s.status === 'Process') {
             if (isAdmin) {
-                linkDisplay = `<button class="btn-small btn-primary btn-add-link" data-id="${s.id}" data-link="N/A">➕ Add</button>`;
+                statusCell = `<button class="btn-small btn-primary btn-add-link" data-id="${s.id}" data-link="N/A">Add</button>`;
             } else {
-                linkDisplay = `<span style="opacity:0.5">${s.productLink || 'N/A'}</span>`;
+                statusCell = `<span class="tag tag-warning">Process</span>`;
             }
+        } else {
+            const statusClass = s.status === 'Live' ? 'tag-success' : '';
+            statusCell = `<span class="tag ${statusClass}">${s.status}</span>`;
         }
 
         let adminActions = '';
@@ -2032,8 +2035,7 @@ async function renderSamplesTable() {
             <td><span class="date-text">${s.requestDate}</span></td>
             <td style="font-weight:600; color:var(--accent-color);">${s.designId}</td>
             <td>${s.requester}</td>
-            <td><span class="tag ${statusClass}">${s.status}</span></td>
-            <td style="max-width:250px; overflow:hidden; text-overflow:ellipsis;">${linkDisplay}</td>
+            <td>${statusCell}</td>
             <td>${s.expiryDate}</td>
             ${isAdmin || (user && s.requester === user.username) ? adminActions : ''}
         `;
