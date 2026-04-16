@@ -106,10 +106,14 @@ async function initDb() {
         CREATE TABLE IF NOT EXISTS sales_entries (
             id TEXT PRIMARY KEY,
             account TEXT NOT NULL,
+            fulfillment TEXT DEFAULT '',
+            design_id TEXT DEFAULT '',
             sku TEXT NOT NULL,
             title TEXT,
-            merchant TEXT NOT NULL,
-            category TEXT NOT NULL,
+            ord_id TEXT DEFAULT '',
+            custom TEXT DEFAULT '',
+            size TEXT DEFAULT '',
+            filename TEXT DEFAULT '',
             sales INTEGER NOT NULL DEFAULT 0,
             date TEXT NOT NULL,
             createdAt TEXT NOT NULL,
@@ -161,6 +165,18 @@ async function initDb() {
     if (!scheduleColNames.includes('createdBy')) {
         await db.run("ALTER TABLE work_schedule ADD COLUMN createdBy TEXT");
     }
+
+    // Migration for sales_entries new fields
+    const salesCols = await db.all("PRAGMA table_info(sales_entries)");
+    const salesColNames = salesCols.map(c => c.name);
+    if (!salesColNames.includes('fulfillment')) await db.run("ALTER TABLE sales_entries ADD COLUMN fulfillment TEXT DEFAULT ''");
+    if (!salesColNames.includes('design_id')) await db.run("ALTER TABLE sales_entries ADD COLUMN design_id TEXT DEFAULT ''");
+    if (!salesColNames.includes('ord_id')) await db.run("ALTER TABLE sales_entries ADD COLUMN ord_id TEXT DEFAULT ''");
+    if (!salesColNames.includes('custom')) await db.run("ALTER TABLE sales_entries ADD COLUMN custom TEXT DEFAULT ''");
+    if (!salesColNames.includes('size')) await db.run("ALTER TABLE sales_entries ADD COLUMN size TEXT DEFAULT ''");
+    if (!salesColNames.includes('filename')) await db.run("ALTER TABLE sales_entries ADD COLUMN filename TEXT DEFAULT ''");
+    // Remove merchant/category columns if present (no longer needed) - handled gracefully via SELECT
+
 
     // Check if admin exists
     const admin = await db.get('SELECT * FROM users WHERE username = ?', ['admin']);
@@ -509,8 +525,8 @@ app.get('/api/sales', authenticateToken, async (req, res) => {
 
 // POST: Thêm bản ghi sales mới (Admin only)
 app.post('/api/sales', authenticateToken, requireAdmin, async (req, res) => {
-    const { account, sku, title, merchant, category, sales, date } = req.body;
-    if (!account || !sku || !merchant || !category || !date) {
+    const { account, fulfillment, design_id, sku, title, ord_id, custom, size, filename, sales, date } = req.body;
+    if (!account || !sku || !date) {
         return res.status(400).json({ error: 'Thiếu thông tin bắt buộc!' });
     }
     if (isNaN(parseInt(sales)) || parseInt(sales) < 0) {
@@ -520,8 +536,8 @@ app.post('/api/sales', authenticateToken, requireAdmin, async (req, res) => {
     const id = Date.now().toString() + Math.random().toString(36).substr(2, 5);
     try {
         await db.run(
-            'INSERT INTO sales_entries (id, account, sku, title, merchant, category, sales, date, createdAt, addedBy) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-            [id, account.trim(), sku.trim().toUpperCase(), title || '', merchant.trim(), category.trim(), parseInt(sales), date, new Date().toISOString(), req.user.username]
+            'INSERT INTO sales_entries (id, account, fulfillment, design_id, sku, title, ord_id, custom, size, filename, sales, date, createdAt, addedBy) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [id, account.trim(), fulfillment || '', design_id || '', sku.trim().toUpperCase(), title || '', ord_id || '', custom || '', size || '', filename || '', parseInt(sales), date, new Date().toISOString(), req.user.username]
         );
         res.json({ success: true, id });
     } catch (error) {
@@ -533,15 +549,15 @@ app.post('/api/sales', authenticateToken, requireAdmin, async (req, res) => {
 // PUT: Cập nhật bản ghi sales (Admin only)
 app.put('/api/sales/:id', authenticateToken, requireAdmin, async (req, res) => {
     const { id } = req.params;
-    const { account, sku, title, merchant, category, sales, date } = req.body;
+    const { account, fulfillment, design_id, sku, title, ord_id, custom, size, filename, sales, date } = req.body;
 
     const entry = await db.get('SELECT * FROM sales_entries WHERE id = ?', [id]);
     if (!entry) return res.status(404).json({ error: 'Không tìm thấy bản ghi!' });
 
     try {
         await db.run(
-            'UPDATE sales_entries SET account=?, sku=?, title=?, merchant=?, category=?, sales=?, date=? WHERE id=?',
-            [account, sku.toUpperCase(), title || '', merchant, category, parseInt(sales), date, id]
+            'UPDATE sales_entries SET account=?, fulfillment=?, design_id=?, sku=?, title=?, ord_id=?, custom=?, size=?, filename=?, sales=?, date=? WHERE id=?',
+            [account, fulfillment || '', design_id || '', sku.toUpperCase(), title || '', ord_id || '', custom || '', size || '', filename || '', parseInt(sales), date, id]
         );
         res.json({ success: true });
     } catch (error) {

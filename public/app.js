@@ -1287,26 +1287,29 @@ async function handleScanSku() {
 async function handleAddSales(e) {
     e.preventDefault();
     const account = document.getElementById('sales-account').value;
+    const fulfillment = document.getElementById('sales-fulfillment').value.trim();
+    const design_id = document.getElementById('sales-design-id').value.trim();
     const sku = document.getElementById('sales-sku').value.trim().toUpperCase();
     const title = document.getElementById('sales-title').value.trim();
-    const merchant = document.getElementById('sales-merchant').value;
-    const category = document.getElementById('sales-category').value;
+    const ord_id = document.getElementById('sales-ord-id').value.trim();
+    const custom = document.getElementById('sales-custom').value.trim();
+    const size = document.getElementById('sales-size').value.trim();
+    const filename = document.getElementById('sales-filename').value.trim();
     const sales = parseInt(document.getElementById('sales-qty').value);
     const date = document.getElementById('sales-date').value;
 
     if (!account) { showError('Vui lòng chọn Account!'); return; }
-    if (!merchant) { showError('Vui lòng chọn Merchant!'); return; }
-    if (!title) { showError('Vui lòng quét SKU để lấy tiêu đề sản phẩm!'); return; }
+    if (!sku) { showError('Vui lòng nhập mã SKU!'); return; }
 
     const editId = document.getElementById('edit-sales-id-inline').value;
 
     try {
         if (editId) {
-            await SalesAPI.update(editId, { account, sku, title, merchant, category, sales, date });
+            await SalesAPI.update(editId, { account, fulfillment, design_id, sku, title, ord_id, custom, size, filename, sales, date });
         } else {
-            await SalesAPI.add({ account, sku, title, merchant, category, sales, date });
+            await SalesAPI.add({ account, fulfillment, design_id, sku, title, ord_id, custom, size, filename, sales, date });
         }
-        
+
         document.getElementById('add-sales-form').reset();
         document.getElementById('edit-sales-id-inline').value = '';
         document.getElementById('sales-date').value = new Date().toISOString().split('T')[0];
@@ -1315,10 +1318,10 @@ async function handleAddSales(e) {
         document.getElementById('btn-save-sales').innerHTML = '💾 Lưu Dữ Liệu';
         document.getElementById('btn-save-sales').classList.remove('btn-warning');
         document.getElementById('btn-cancel-edit-sales').classList.add('hidden');
-        
+
         document.getElementById('sales-form-msg').textContent = editId ? '✅ Đã cập nhật thành công!' : '✅ Đã lưu thành công!';
         setTimeout(() => document.getElementById('sales-form-msg').textContent = '', 3000);
-        
+
         cachedSales = await SalesAPI.getAll();
         renderSalesTable();
         renderStatistics();
@@ -1346,13 +1349,16 @@ function renderSalesTable() {
     if (search) data = data.filter(s =>
         s.sku.toLowerCase().includes(search) ||
         (s.title || '').toLowerCase().includes(search) ||
-        (s.account || '').toLowerCase().includes(search)
+        (s.account || '').toLowerCase().includes(search) ||
+        (s.ord_id || '').toLowerCase().includes(search) ||
+        (s.design_id || '').toLowerCase().includes(search) ||
+        (s.filename || '').toLowerCase().includes(search)
     );
     if (filterDate) data = data.filter(s => s.date === filterDate);
 
     tbody.innerHTML = '';
     if (data.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:gray;padding:20px;">Chưa có dữ liệu doanh số...</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="12" style="text-align:center;color:gray;padding:20px;">Chưa có dữ liệu doanh số...</td></tr>';
         return;
     }
     data.forEach(s => {
@@ -1361,13 +1367,18 @@ function renderSalesTable() {
             <button class="btn-small btn-edit" onclick="openEditSales('${s.id}')">Sửa</button>
             <button class="btn-small btn-danger" onclick="handleDeleteSales('${s.id}')">Xóa</button>
         ` : `<span style="color:gray;font-size:0.8em">—</span>`;
+        const cell = (val) => val ? `<td>${val}</td>` : `<td style="color:var(--text-secondary)">—</td>`;
         tr.innerHTML = `
             <td><span class="date-text">${s.date}</span></td>
-            <td><span class="sku-tag">${s.sku}</span></td>
-            <td style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${s.title || ''}">${s.title || '<span style="color:gray">—</span>'}</td>
             <td>${s.account}</td>
-            <td><span class="tag">${s.merchant}</span></td>
-            <td>${s.category}</td>
+            ${cell(s.fulfillment)}
+            ${cell(s.design_id)}
+            <td><span class="sku-tag">${s.sku}</span></td>
+            <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${s.title || ''}">${s.title || '<span style="color:var(--text-secondary)">—</span>'}</td>
+            ${cell(s.ord_id)}
+            ${cell(s.custom)}
+            ${cell(s.size)}
+            <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${s.filename || ''}">${s.filename || '<span style="color:var(--text-secondary)">—</span>'}</td>
             <td><span class="units-badge">${s.sales}</span></td>
             <td>${actions}</td>
         `;
@@ -1379,16 +1390,20 @@ function renderSalesTable() {
 window.openEditSales = function(id) {
     const entry = cachedSales.find(s => s.id === id);
     if (!entry) return;
-    
+
     document.getElementById('edit-sales-id-inline').value = entry.id;
     document.getElementById('sales-account').value = entry.account;
+    document.getElementById('sales-fulfillment').value = entry.fulfillment || '';
+    document.getElementById('sales-design-id').value = entry.design_id || '';
     document.getElementById('sales-sku').value = entry.sku;
     document.getElementById('sales-title').value = entry.title || '';
-    document.getElementById('sales-merchant').value = entry.merchant;
-    document.getElementById('sales-category').value = entry.category;
+    document.getElementById('sales-ord-id').value = entry.ord_id || '';
+    document.getElementById('sales-custom').value = entry.custom || '';
+    document.getElementById('sales-size').value = entry.size || '';
+    document.getElementById('sales-filename').value = entry.filename || '';
     document.getElementById('sales-qty').value = entry.sales;
     document.getElementById('sales-date').value = entry.date;
-    
+
     document.getElementById('btn-save-sales').innerHTML = '✏️ Cập Nhật Dữ Liệu';
     document.getElementById('btn-cancel-edit-sales').classList.remove('hidden');
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -1417,13 +1432,16 @@ function renderStatistics() {
     const totalUnits = monthSales.reduce((a, s) => a + (s.sales || 0), 0);
     const uniqueSkus = [...new Set(cachedSales.map(s => s.sku))].length;
 
-    const merchantCount = {};
-    cachedSales.forEach(s => { merchantCount[s.merchant] = (merchantCount[s.merchant] || 0) + s.sales; });
-    const topMerchant = Object.entries(merchantCount).sort((a, b) => b[1] - a[1])[0]?.[0] || '—';
+    const accountCount = {};
+    cachedSales.forEach(s => { accountCount[s.account] = (accountCount[s.account] || 0) + s.sales; });
+    const topAccount = Object.entries(accountCount).sort((a, b) => b[1] - a[1])[0]?.[0] || '—';
 
-    const catCount = {};
-    cachedSales.forEach(s => { catCount[s.category] = (catCount[s.category] || 0) + s.sales; });
-    const topCat = Object.entries(catCount).sort((a, b) => b[1] - a[1])[0]?.[0] || '—';
+    const fulfillmentCount = {};
+    cachedSales.forEach(s => {
+        const key = s.fulfillment || 'Khác';
+        fulfillmentCount[key] = (fulfillmentCount[key] || 0) + s.sales;
+    });
+    const topFulfillment = Object.entries(fulfillmentCount).sort((a, b) => b[1] - a[1])[0]?.[0] || '—';
 
     const statsContainer = document.getElementById('stats-summary-cards');
     if (statsContainer) {
@@ -1437,12 +1455,12 @@ function renderStatistics() {
                 <div class="stat-val" id="stat-unique-skus">${uniqueSkus}</div>
             </div>
             <div class="stat-card">
-                <div class="stat-title">Top Merchant</div>
-                <div class="stat-val" id="stat-top-merchant" style="font-size: 1.5em;">${topMerchant}</div>
+                <div class="stat-title">Top Account</div>
+                <div class="stat-val" id="stat-top-merchant" style="font-size: 1.5em;">${topAccount}</div>
             </div>
             <div class="stat-card">
-                <div class="stat-title">Top Category</div>
-                <div class="stat-val" id="stat-top-category" style="font-size: 1.5em;">${topCat}</div>
+                <div class="stat-title">Top Fulfillment</div>
+                <div class="stat-val" id="stat-top-category" style="font-size: 1.5em;">${topFulfillment}</div>
             </div>
         `;
     }
@@ -1455,7 +1473,7 @@ function renderStatistics() {
 function renderTopProducts(tbodyId, data) {
     const grouped = {};
     data.forEach(s => {
-        if (!grouped[s.sku]) grouped[s.sku] = { sku: s.sku, title: s.title || s.sku, merchant: s.merchant, category: s.category, total: 0 };
+        if (!grouped[s.sku]) grouped[s.sku] = { sku: s.sku, title: s.title || s.sku, account: s.account, total: 0 };
         grouped[s.sku].total += s.sales;
     });
     const sorted = Object.values(grouped).sort((a, b) => b.total - a.total).slice(0, 10);
@@ -1465,20 +1483,17 @@ function renderTopProducts(tbodyId, data) {
         tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:gray;padding:20px;">Chưa có dữ liệu...</td></tr>';
         return;
     }
-    sorted.forEach((p, i) => {
-        let linkHtml = '<span style="color:gray">N/A</span>';
-        if (p.merchant && p.merchant.toLowerCase().includes('amazon')) {
-            linkHtml = `
-                <a href="https://www.amazon.com/dp/${p.sku}" target="_blank" style="display:inline-flex; align-items:center; justify-content:center; width:30px; height:30px; background:rgba(96, 165, 250, 0.15); border:1px solid rgba(96, 165, 250, 0.3); border-radius:6px; color:#60a5fa; transition:all 0.2s;" onmouseover="this.style.background='rgba(96, 165, 250, 0.3)'" onmouseout="this.style.background='rgba(96, 165, 250, 0.15)'" title="Mở trang Amazon">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
-                </a>`;
-        }
-        
+    sorted.forEach((p) => {
+        const linkHtml = `
+            <a href="https://www.amazon.com/dp/${p.sku}" target="_blank" style="display:inline-flex; align-items:center; justify-content:center; width:30px; height:30px; background:rgba(96, 165, 250, 0.15); border:1px solid rgba(96, 165, 250, 0.3); border-radius:6px; color:#60a5fa; transition:all 0.2s;" onmouseover="this.style.background='rgba(96, 165, 250, 0.3)'" onmouseout="this.style.background='rgba(96, 165, 250, 0.15)'" title="Mở trang Amazon">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+            </a>`;
+
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td><span class="sku-tag">${p.sku}</span></td>
             <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${p.title}">${p.title}</td>
-            <td><span class="tag">${p.category || 'N/A'}</span></td>
+            <td><span class="tag">${p.account || 'N/A'}</span></td>
             <td>${linkHtml}</td>
         `;
         tbody.appendChild(tr);
@@ -1592,23 +1607,11 @@ function renderCategoriesFullTable() {
 
 function updateSalesDropdowns() {
     const accSelect = document.getElementById('sales-account');
-    const merchSelect = document.getElementById('sales-merchant');
-    const catSelect = document.getElementById('sales-category');
-    if (!accSelect || !merchSelect || !catSelect) return;
+    if (!accSelect) return;
 
     accSelect.innerHTML = '<option value="">-- Chọn Account --</option>';
     cachedAccounts.forEach(acc => {
         accSelect.innerHTML += `<option value="${acc.name}">${acc.name}</option>`;
-    });
-
-    merchSelect.innerHTML = '<option value="">-- Chọn Merchant --</option>';
-    cachedMerchants.forEach(m => {
-        merchSelect.innerHTML += `<option value="${m.name}">${m.name}</option>`;
-    });
-
-    catSelect.innerHTML = '<option value="">-- Chọn Category --</option>';
-    cachedCategories.forEach(c => {
-        catSelect.innerHTML += `<option value="${c}">${c}</option>`;
     });
 }
 
