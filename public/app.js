@@ -1302,19 +1302,19 @@ async function handleAddSales(e) {
     const filename = filenameRaw || `${accPart}_${fulPart}_${sku}_${ordPart}`;
 
     const sales = parseInt(document.getElementById('sales-qty').value) || 0;
-    const date = document.getElementById('sales-date').value;
+    const date = document.getElementById('sales-date').value || new Date().toISOString().split('T')[0];
 
     if (!account) { showError('Vui lòng chọn Account!'); return; }
     if (!sku) { showError('Vui lòng nhập mã SKU!'); return; }
-    if (!date) { showError('Vui lòng chọn Ngày!'); return; }
 
+    const payload = { account, fulfillment, design_id, sku, title, ord_id, custom, size, filename, sales, date };
     const editId = document.getElementById('edit-sales-id-inline').value;
 
     try {
         if (editId) {
-            await SalesAPI.update(editId, { account, fulfillment, design_id, sku, title, ord_id, custom, size, filename, sales, date });
+            await SalesAPI.update(editId, payload);
         } else {
-            await SalesAPI.add({ account, fulfillment, design_id, sku, title, ord_id, custom, size, filename, sales, date });
+            await SalesAPI.add(payload);
         }
 
         document.getElementById('add-sales-form').reset();
