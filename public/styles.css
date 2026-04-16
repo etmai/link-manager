@@ -164,6 +164,8 @@ textarea { resize: vertical; min-height: 80px; }
 .modal-actions .btn-primary,
 .modal-actions .btn-secondary,
 .modal-actions .btn-danger { white-space: nowrap; flex-shrink: 0; min-width: fit-content; }
+.btn-danger-solid { background: var(--danger-color) !important; color: white !important; }
+.btn-danger-solid:hover { background: #dc2626 !important; box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4) !important; }
 
 /* Custom scrollbar */
 ::-webkit-scrollbar { width: 8px; height: 8px;}
