@@ -4,6 +4,7 @@ const { open } = require('sqlite');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const path = require('path');
+const { randomUUID } = require('crypto');
 const { URL, URLSearchParams } = require('url');
 const https = require('https');
 const http = require('http');
@@ -166,16 +167,29 @@ async function initDb() {
         await db.run("ALTER TABLE work_schedule ADD COLUMN createdBy TEXT");
     }
 
-    // Migration for sales_entries new fields
+    // Migration for sales_entries — ensure all required columns exist
     const salesCols = await db.all("PRAGMA table_info(sales_entries)");
     const salesColNames = salesCols.map(c => c.name);
-    if (!salesColNames.includes('fulfillment')) await db.run("ALTER TABLE sales_entries ADD COLUMN fulfillment TEXT DEFAULT ''");
-    if (!salesColNames.includes('design_id')) await db.run("ALTER TABLE sales_entries ADD COLUMN design_id TEXT DEFAULT ''");
-    if (!salesColNames.includes('ord_id')) await db.run("ALTER TABLE sales_entries ADD COLUMN ord_id TEXT DEFAULT ''");
-    if (!salesColNames.includes('custom')) await db.run("ALTER TABLE sales_entries ADD COLUMN custom TEXT DEFAULT ''");
-    if (!salesColNames.includes('size')) await db.run("ALTER TABLE sales_entries ADD COLUMN size TEXT DEFAULT ''");
-    if (!salesColNames.includes('filename')) await db.run("ALTER TABLE sales_entries ADD COLUMN filename TEXT DEFAULT ''");
-    // Remove merchant/category columns if present (no longer needed) - handled gracefully via SELECT
+    const salesNeeded = [
+        ['fulfillment', "TEXT DEFAULT ''"],
+        ['design_id',   "TEXT DEFAULT ''"],
+        ['ord_id',      "TEXT DEFAULT ''"],
+        ['custom',      "TEXT DEFAULT ''"],
+        ['size',        "TEXT DEFAULT 'N/A'"],
+        ['filename',    "TEXT DEFAULT ''"],
+        ['title',       "TEXT DEFAULT ''"],
+        ['account',     "TEXT DEFAULT ''"],
+        ['sku',         "TEXT DEFAULT ''"],
+        ['date',        "TEXT DEFAULT ''"],
+        ['sales',       "INTEGER DEFAULT 0"],
+        ['createdAt',   "TEXT DEFAULT ''"],
+        ['addedBy',     "TEXT DEFAULT ''"],
+    ];
+    for (const [col, def] of salesNeeded) {
+        if (!salesColNames.includes(col)) {
+            await db.run(`ALTER TABLE sales_entries ADD COLUMN ${col} ${def}`);
+        }
+    }
 
 
     // Check if admin exists
@@ -200,7 +214,7 @@ async function initDb() {
     if (countAccs.count === 0) {
         const defaults = ["Amazon_Main", "Etsy_Shop1", "eBay_Direct"];
         for (const acc of defaults) {
-            const id = Date.now().toString() + Math.random().toString(36).substr(2, 5);
+            const id = randomUUID();
             await db.run('INSERT INTO accounts (id, name) VALUES (?, ?)', [id, acc]);
         }
     }
@@ -210,7 +224,7 @@ async function initDb() {
     if (countMerchants.count === 0) {
         const defaults = ["Amazon", "Etsy", "eBay", "Shopify", "Khác"];
         for (const m of defaults) {
-            const id = Date.now().toString() + Math.random().toString(36).substr(2, 5);
+            const id = randomUUID();
             await db.run('INSERT INTO merchants (id, name) VALUES (?, ?)', [id, m]);
         }
     }
@@ -242,6 +256,20 @@ function requireAdmin(req, res, next) {
 }
 
 // =========== API ROUTES ===========
+
+// DEBUG: Schema info (Admin only)
+app.get('/api/debug/schema', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const tables = await db.all("SELECT name FROM sqlite_master WHERE type='table'");
+        const schema = {};
+        for (const t of tables) {
+            schema[t.name] = await db.all(`PRAGMA table_info(${t.name})`);
+        }
+        res.json(schema);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
 
 // AUTH
 app.post('/api/auth/login', async (req, res) => {
@@ -406,7 +434,7 @@ app.post('/api/links/batch', authenticateToken, async (req, res) => {
                     forbiddenCount++;
                 }
             } else if (existingIndex === -1) {
-                const newId = Date.now().toString() + Math.random().toString(36).substr(2, 5);
+                const newId = randomUUID();
                 await db.run('INSERT INTO links (id, url, date, categories, createdAt, addedBy) VALUES (?, ?, ?, ?, ?, ?)',
                     [newId, data.url, data.date, JSON.stringify(data.categories), new Date().toISOString(), req.user.username]);
                 newCount++;
@@ -544,7 +572,7 @@ app.post('/api/sales', authenticateToken, requireAdmin, async (req, res) => {
         return res.status(400).json({ error: `Thiếu thông tin bắt buộc: ${missing}` });
     }
 
-    const id = Date.now().toString() + Math.random().toString(36).substr(2, 5);
+    const id = randomUUID();
     try {
         await db.run(
             'INSERT INTO sales_entries (id, account, fulfillment, design_id, sku, title, ord_id, custom, size, filename, sales, date, createdAt, addedBy) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
@@ -553,7 +581,7 @@ app.post('/api/sales', authenticateToken, requireAdmin, async (req, res) => {
         res.json({ success: true, id });
     } catch (error) {
         console.error('Sales insert failed:', error);
-        res.status(500).json({ error: 'Không thể thêm bản ghi sales.' });
+        res.status(500).json({ error: `Không thể thêm bản ghi sales: ${error.message}` });
     }
 });
 
@@ -607,7 +635,7 @@ app.get('/api/accounts', authenticateToken, async (req, res) => {
 app.post('/api/accounts', authenticateToken, requireAdmin, async (req, res) => {
     const { name } = req.body;
     if (!name) return res.status(400).json({ error: 'Tên account không được để trống!' });
-    const id = Date.now().toString() + Math.random().toString(36).substr(2, 5);
+    const id = randomUUID();
     try {
         await db.run('INSERT INTO accounts (id, name) VALUES (?, ?)', [id, name.trim()]);
         res.json({ success: true, id });
@@ -639,7 +667,7 @@ app.get('/api/merchants', authenticateToken, async (req, res) => {
 app.post('/api/merchants', authenticateToken, requireAdmin, async (req, res) => {
     const { name } = req.body;
     if (!name) return res.status(400).json({ error: 'Tên merchant không được để trống!' });
-    const id = Date.now().toString() + Math.random().toString(36).substr(2, 5);
+    const id = randomUUID();
     try {
         await db.run('INSERT INTO merchants (id, name) VALUES (?, ?)', [id, name.trim()]);
         res.json({ success: true, id });
@@ -694,7 +722,7 @@ app.post('/api/schedule', authenticateToken, async (req, res) => {
         targetUser = userId;
     }
 
-    const id = Date.now().toString() + Math.random().toString(36).substr(2, 5);
+    const id = randomUUID();
     await db.run(
         'INSERT INTO work_schedule (id, title, description, date, userId, status, createdBy, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
         [id, title.trim(), description || '', date, targetUser, 'pending', req.user.username, new Date().toISOString()]
@@ -764,7 +792,7 @@ app.post('/api/samples', authenticateToken, async (req, res) => {
     const exists = await db.get('SELECT * FROM sample_requests WHERE designId = ?', [designId.trim()]);
     if (exists) return res.status(400).json({ error: 'Mã Design này đã tồn tại trong hệ thống!' });
 
-    const id = Date.now().toString() + Math.random().toString(36).substr(2, 5);
+    const id = randomUUID();
     const now = new Date().toISOString();
     const dateStr = now.split('T')[0];
 
