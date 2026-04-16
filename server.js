@@ -374,36 +374,31 @@ app.post('/api/links/batch', authenticateToken, async (req, res) => {
     let newCount = 0;
     let forbiddenCount = 0;
     
-    // Use transaction for batch operations
-    await db.run('BEGIN TRANSACTION');
     try {
+        await db.exec('BEGIN TRANSACTION');
         for (const data of linksData) {
             const normalizedInput = normalizeUrl(data.url);
             const existingIndex = dbLinks.findIndex(l => normalizeUrl(l.url) === normalizedInput);
             if (existingIndex !== -1 && forceSaveCheckbox) {
-                // MERGE (Update existing)
                 const existing = dbLinks[existingIndex];
-                
-                // Check permission: Admin or Creator
                 if (req.user.role === 'admin' || existing.addedBy === req.user.username) {
                     const mergedCats = [...new Set([...existing.categories, ...data.categories])];
-                    await db.run('UPDATE links SET date = ?, categories = ?, updatedAt = ?, updatedBy = ? WHERE id = ?', 
+                    await db.run('UPDATE links SET date = ?, categories = ?, updatedAt = ?, updatedBy = ? WHERE id = ?',
                         [data.date, JSON.stringify(mergedCats), new Date().toISOString(), req.user.username, existing.id]);
                     updatedCount++;
                 } else {
                     forbiddenCount++;
                 }
             } else if (existingIndex === -1) {
-                // NEW
                 const newId = Date.now().toString() + Math.random().toString(36).substr(2, 5);
                 await db.run('INSERT INTO links (id, url, date, categories, createdAt, addedBy) VALUES (?, ?, ?, ?, ?, ?)',
                     [newId, data.url, data.date, JSON.stringify(data.categories), new Date().toISOString(), req.user.username]);
                 newCount++;
             }
         }
-        await db.run('COMMIT');
+        await db.exec('COMMIT');
     } catch (error) {
-        await db.run('ROLLBACK');
+        await db.exec('ROLLBACK');
         console.error('Batch operation failed:', error);
         return res.status(500).json({ error: 'Không thể thực hiện thao tác batch. Đã rollback.' });
     }
@@ -523,16 +518,13 @@ app.post('/api/sales', authenticateToken, requireAdmin, async (req, res) => {
     }
 
     const id = Date.now().toString() + Math.random().toString(36).substr(2, 5);
-    await db.run('BEGIN TRANSACTION');
     try {
         await db.run(
             'INSERT INTO sales_entries (id, account, sku, title, merchant, category, sales, date, createdAt, addedBy) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
             [id, account.trim(), sku.trim().toUpperCase(), title || '', merchant.trim(), category.trim(), parseInt(sales), date, new Date().toISOString(), req.user.username]
         );
-        await db.run('COMMIT');
         res.json({ success: true, id });
     } catch (error) {
-        await db.run('ROLLBACK');
         console.error('Sales insert failed:', error);
         res.status(500).json({ error: 'Không thể thêm bản ghi sales.' });
     }
@@ -546,16 +538,13 @@ app.put('/api/sales/:id', authenticateToken, requireAdmin, async (req, res) => {
     const entry = await db.get('SELECT * FROM sales_entries WHERE id = ?', [id]);
     if (!entry) return res.status(404).json({ error: 'Không tìm thấy bản ghi!' });
 
-    await db.run('BEGIN TRANSACTION');
     try {
         await db.run(
             'UPDATE sales_entries SET account=?, sku=?, title=?, merchant=?, category=?, sales=?, date=? WHERE id=?',
             [account, sku.toUpperCase(), title || '', merchant, category, parseInt(sales), date, id]
         );
-        await db.run('COMMIT');
         res.json({ success: true });
     } catch (error) {
-        await db.run('ROLLBACK');
         console.error('Sales update failed:', error);
         res.status(500).json({ error: 'Không thể cập nhật bản ghi sales.' });
     }

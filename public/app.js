@@ -9,10 +9,7 @@ const API = {
 
         const res = await fetch(path, { ...options, headers });
 
-        if (res.status === 401 || res.status === 403) {
-            // Token hết hạn hoặc không hợp lệ
-            if (res.status === 401) { logout(); return null; }
-        }
+        if (res.status === 401) { logout(); return null; }
 
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || `Lỗi API: ${res.status}`);
