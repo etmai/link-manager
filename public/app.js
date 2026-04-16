@@ -1162,24 +1162,40 @@ function exportToCSV() {
 
     links.sort((a, b) => new Date(b.date) - new Date(a.date));
 
-    let csvContent = 'URL,Ngày nhập,Ngày cập nhật,Danh mục\n';
-    links.forEach(l => {
-        const safeUrl = `"${l.url.replace(/"/g, '""')}"`;
-        const catStr = `"${l.categories.join(', ')}"`;
-        const updatedTime = l.updatedAt ? new Date(l.updatedAt).toLocaleDateString('vi-VN') : 'N/A';
-        csvContent += `${safeUrl},${l.date},${updatedTime},${catStr}\n`;
+    const escape = val => `"${String(val || '').replace(/"/g, '""')}"`;
+
+    const headers = ['STT', 'URL', 'Ngày nhập', 'Người thêm', 'Người cập nhật', 'Ngày cập nhật', 'Danh mục'];
+    let csvContent = headers.join(',') + '\n';
+
+    links.forEach((l, index) => {
+        const updatedTime = l.updatedAt ? new Date(l.updatedAt).toLocaleDateString('vi-VN') : '';
+        const addedBy = l.addedBy || '';
+        const updatedBy = l.updatedBy || '';
+        const catStr = Array.isArray(l.categories) ? l.categories.join(', ') : (l.categories || '');
+        const row = [
+            index + 1,
+            escape(l.url),
+            l.date || '',
+            escape(addedBy),
+            escape(updatedBy),
+            updatedTime,
+            escape(catStr)
+        ];
+        csvContent += row.join(',') + '\n';
     });
 
     const BOM = '\uFEFF';
     const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
 
+    const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
     const link = document.createElement('a');
     link.setAttribute('href', url);
-    link.setAttribute('download', `Data_Export_${new Date().getTime()}.csv`);
+    link.setAttribute('download', `Data_Export_${today}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
 }
 
 function updateTopbar(tabId) {
