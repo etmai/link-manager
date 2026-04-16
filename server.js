@@ -529,7 +529,8 @@ app.post('/api/sales', authenticateToken, requireAdmin, async (req, res) => {
     if (!account || !sku || !date) {
         return res.status(400).json({ error: 'Thiếu thông tin bắt buộc!' });
     }
-    if (isNaN(parseInt(sales)) || parseInt(sales) < 0) {
+    const salesNum = parseInt(sales ?? 0);
+    if (isNaN(salesNum) || salesNum < 0) {
         return res.status(400).json({ error: 'Số lượng bán phải là số nguyên không âm!' });
     }
 
@@ -537,7 +538,7 @@ app.post('/api/sales', authenticateToken, requireAdmin, async (req, res) => {
     try {
         await db.run(
             'INSERT INTO sales_entries (id, account, fulfillment, design_id, sku, title, ord_id, custom, size, filename, sales, date, createdAt, addedBy) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-            [id, account.trim(), fulfillment || '', design_id || '', sku.trim().toUpperCase(), title || '', ord_id || '', custom || '', size || '', filename || '', parseInt(sales), date, new Date().toISOString(), req.user.username]
+            [id, account.trim(), fulfillment || '', design_id || '', sku.trim().toUpperCase(), title || '', ord_id || '', custom || '', size || 'N/A', filename || '', salesNum, date, new Date().toISOString(), req.user.username]
         );
         res.json({ success: true, id });
     } catch (error) {
@@ -557,7 +558,7 @@ app.put('/api/sales/:id', authenticateToken, requireAdmin, async (req, res) => {
     try {
         await db.run(
             'UPDATE sales_entries SET account=?, fulfillment=?, design_id=?, sku=?, title=?, ord_id=?, custom=?, size=?, filename=?, sales=?, date=? WHERE id=?',
-            [account, fulfillment || '', design_id || '', sku.toUpperCase(), title || '', ord_id || '', custom || '', size || '', filename || '', parseInt(sales), date, id]
+            [account, fulfillment || '', design_id || '', sku.toUpperCase(), title || '', ord_id || '', custom || '', size || 'N/A', filename || '', parseInt(sales ?? 0) || 0, date, id]
         );
         res.json({ success: true });
     } catch (error) {

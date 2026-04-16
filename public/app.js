@@ -1293,13 +1293,20 @@ async function handleAddSales(e) {
     const title = document.getElementById('sales-title').value.trim();
     const ord_id = document.getElementById('sales-ord-id').value.trim();
     const custom = document.getElementById('sales-custom').value.trim();
-    const size = document.getElementById('sales-size').value.trim();
-    const filename = document.getElementById('sales-filename').value.trim();
-    const sales = parseInt(document.getElementById('sales-qty').value);
+    const size = document.getElementById('sales-size').value.trim() || 'N/A';
+
+    const filenameRaw = document.getElementById('sales-filename').value.trim();
+    const accPart = account.slice(0, 3);
+    const fulPart = fulfillment.slice(0, 2);
+    const ordPart = ord_id.slice(-4);
+    const filename = filenameRaw || `${accPart}_${fulPart}_${sku}_${ordPart}`;
+
+    const sales = parseInt(document.getElementById('sales-qty').value) || 0;
     const date = document.getElementById('sales-date').value;
 
     if (!account) { showError('Vui lòng chọn Account!'); return; }
     if (!sku) { showError('Vui lòng nhập mã SKU!'); return; }
+    if (!date) { showError('Vui lòng chọn Ngày!'); return; }
 
     const editId = document.getElementById('edit-sales-id-inline').value;
 
