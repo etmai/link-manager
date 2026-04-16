@@ -273,13 +273,15 @@ app.post('/api/users', authenticateToken, requireAdmin, async (req, res) => {
 app.delete('/api/users/:username', authenticateToken, requireAdmin, async (req, res) => {
     const { username } = req.params;
     if (username === req.user.username) return res.status(400).json({ error: "Không thể tự xóa bản thân!" });
-    
-    const countAdm = await db.get('SELECT COUNT(*) as c FROM users WHERE role = "admin"');
+
     const target = await db.get('SELECT role FROM users WHERE username = ?', [username]);
-    if (target.role === 'admin' && countAdm.c <= 1) {
-        return res.status(400).json({ error: "Phải giữ lại ít nhất 1 Admin trong Database!" });
+    if (!target) return res.status(404).json({ error: "Người dùng không tồn tại!" });
+
+    if (target.role === 'admin') {
+        const countAdm = await db.get('SELECT COUNT(*) as c FROM users WHERE role = "admin"');
+        if (countAdm.c <= 1) return res.status(400).json({ error: "Phải giữ lại ít nhất 1 Admin trong Database!" });
     }
-    
+
     await db.run('DELETE FROM users WHERE username = ?', [username]);
     res.json({ success: true });
 });
