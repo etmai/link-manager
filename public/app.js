@@ -1286,30 +1286,47 @@ async function handleScanSku() {
 // ====== SALES: ADD ENTRY ======
 async function handleAddSales(e) {
     e.preventDefault();
-    const account = document.getElementById('sales-account').value;
-    const fulfillment = document.getElementById('sales-fulfillment').value.trim();
-    const design_id = document.getElementById('sales-design-id').value.trim();
-    const sku = document.getElementById('sales-sku').value.trim().toUpperCase();
-    const title = document.getElementById('sales-title').value.trim();
-    const ord_id = document.getElementById('sales-ord-id').value.trim();
-    const custom = document.getElementById('sales-custom').value.trim();
-    const size = document.getElementById('sales-size').value.trim() || 'N/A';
 
-    const filenameRaw = document.getElementById('sales-filename').value.trim();
+    const accountEl = document.getElementById('sales-account');
+    const skuEl = document.getElementById('sales-sku');
+    const dateEl = document.getElementById('sales-date');
+    const fulfillmentEl = document.getElementById('sales-fulfillment');
+    const designIdEl = document.getElementById('sales-design-id');
+    const titleEl = document.getElementById('sales-title');
+    const ordIdEl = document.getElementById('sales-ord-id');
+    const customEl = document.getElementById('sales-custom');
+    const sizeEl = document.getElementById('sales-size');
+    const filenameEl = document.getElementById('sales-filename');
+    const salesQtyEl = document.getElementById('sales-qty');
+
+    if (!accountEl || !skuEl || !dateEl) {
+        showError('Lỗi giao diện: không tìm thấy trường nhập liệu. Vui lòng tải lại trang!');
+        return;
+    }
+
+    const account = (accountEl.value || '').trim();
+    const fulfillment = (fulfillmentEl?.value || '').trim();
+    const design_id = (designIdEl?.value || '').trim();
+    const sku = (skuEl.value || '').trim().toUpperCase();
+    const title = (titleEl?.value || '').trim();
+    const ord_id = (ordIdEl?.value || '').trim();
+    const custom = (customEl?.value || '').trim();
+    const size = (sizeEl?.value || '').trim() || 'N/A';
+    const filenameRaw = (filenameEl?.value || '').trim();
+    const sales = parseInt(salesQtyEl?.value) || 0;
+    const date = dateEl.value || new Date().toISOString().split('T')[0];
+
     const accPart = account.slice(0, 3);
     const fulPart = fulfillment.slice(0, 2);
     const ordPart = ord_id.slice(-4);
     const filename = filenameRaw || `${accPart}_${fulPart}_${sku}_${ordPart}`;
 
-    const sales = parseInt(document.getElementById('sales-qty').value) || 0;
-    const date = document.getElementById('sales-date').value || new Date().toISOString().split('T')[0];
-
     if (!account) { showError('Vui lòng chọn Account!'); return; }
     if (!sku) { showError('Vui lòng nhập mã SKU!'); return; }
     if (!date) { showError('Vui lòng chọn Ngày!'); return; }
 
-    const payload = { account: account.trim(), fulfillment, design_id, sku, title, ord_id, custom, size, filename, sales, date };
-    const editId = document.getElementById('edit-sales-id-inline').value;
+    const payload = { account, fulfillment, design_id, sku, title, ord_id, custom, size, filename, sales, date };
+    const editId = (document.getElementById('edit-sales-id-inline')?.value || '').trim();
 
     try {
         if (editId) {
@@ -1321,19 +1338,25 @@ async function handleAddSales(e) {
         document.getElementById('add-sales-form').reset();
         document.getElementById('edit-sales-id-inline').value = '';
         document.getElementById('sales-date').value = new Date().toISOString().split('T')[0];
-        document.getElementById('sales-title').value = '';
-        document.getElementById('sales-title').style.color = '';
+        document.getElementById('sales-qty').value = '0';
+        if (titleEl) { titleEl.value = ''; titleEl.style.color = ''; }
         document.getElementById('btn-save-sales').innerHTML = '💾 Lưu Dữ Liệu';
         document.getElementById('btn-save-sales').classList.remove('btn-warning');
-        document.getElementById('btn-cancel-edit-sales').classList.add('hidden');
+        document.getElementById('btn-cancel-edit-sales')?.classList.add('hidden');
+        updateSalesDropdowns();
 
-        document.getElementById('sales-form-msg').textContent = editId ? '✅ Đã cập nhật thành công!' : '✅ Đã lưu thành công!';
-        setTimeout(() => document.getElementById('sales-form-msg').textContent = '', 3000);
+        const msgEl = document.getElementById('sales-form-msg');
+        if (msgEl) {
+            msgEl.textContent = editId ? '✅ Đã cập nhật thành công!' : '✅ Đã lưu thành công!';
+            setTimeout(() => { msgEl.textContent = ''; }, 3000);
+        }
 
         cachedSales = await SalesAPI.getAll();
         renderSalesTable();
         renderStatistics();
-    } catch (err) { showError(err.message); }
+    } catch (err) {
+        showError(err.message);
+    }
 }
 
 document.getElementById('btn-cancel-edit-sales')?.addEventListener('click', () => {
@@ -1626,7 +1649,9 @@ function updateSalesDropdowns() {
 
     accSelect.innerHTML = '<option value="">-- Chọn Account --</option>';
     cachedAccounts.forEach(acc => {
-        accSelect.innerHTML += `<option value="${acc.name}">${acc.name}</option>`;
+        const name = (acc.name || '').trim();
+        if (!name) return;
+        accSelect.innerHTML += `<option value="${name}">${name}</option>`;
     });
 }
 

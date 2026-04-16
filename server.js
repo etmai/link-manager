@@ -540,6 +540,7 @@ app.post('/api/sales', authenticateToken, requireAdmin, async (req, res) => {
 
     if (!account || !sku || !date) {
         const missing = [!account && 'Account', !sku && 'SKU', !date && 'Ngày'].filter(Boolean).join(', ');
+        console.error('[SALES POST] Thiếu fields:', { account, sku, date, body: req.body });
         return res.status(400).json({ error: `Thiếu thông tin bắt buộc: ${missing}` });
     }
 
