@@ -295,6 +295,27 @@ const DOM = {
 };
 
 // ====== UTILS ======
+function copyToClipboard(text, element) {
+    if (!text) return;
+    navigator.clipboard.writeText(text).then(() => {
+        if (!element) {
+            showSuccess?.('Đã sao chép!');
+            return;
+        }
+        const originalHTML = element.innerHTML;
+        const originalTitle = element.title;
+        element.style.color = '#34d399';
+        element.innerHTML = '✓ Copied';
+        setTimeout(() => {
+            element.style.color = '';
+            element.innerHTML = originalHTML;
+            element.title = originalTitle;
+        }, 1500);
+    }).catch(err => {
+        console.error('Copy failed:', err);
+    });
+}
+
 function debounce(func, wait) {
     let timeout;
     return function(...args) { clearTimeout(timeout); timeout = setTimeout(() => func.apply(this, args), wait); };
@@ -722,14 +743,23 @@ function setupEventListeners() {
         if (!btn) return;
         const id = btn.getAttribute('data-id');
 
-        // 2. TAB: LINKS (Sửa/Xóa)
+        // 2. TAB: SALES (Sửa/Xóa)
+        if (btn.classList.contains('btn-edit-sales')) {
+            if (id) window.openEditSales(id);
+            return;
+        } else if (btn.classList.contains('btn-delete-sales')) {
+            if (id) window.handleDeleteSales(id);
+            return;
+        }
+
+        // 3. TAB: LINKS (Sửa/Xóa)
         if (btn.classList.contains('btn-edit-link')) {
             if (id) window.openEditLink(id);
         } else if (btn.classList.contains('btn-delete-link')) {
             if (id) window.handleDeleteLink(id);
         }
 
-        // 3. TAB: SAMPLES (Add/Sửa/Xóa)
+        // 4. TAB: SAMPLES (Add/Sửa/Xóa)
         else if (btn.classList.contains('btn-add-link') || btn.classList.contains('btn-edit-sample')) {
             const link = btn.getAttribute('data-link') || 'N/A';
             if (id) window.handleEditSampleLink(id, link);
@@ -737,7 +767,7 @@ function setupEventListeners() {
             if (id) window.handleDeleteSample(id);
         }
 
-        // 4. TAB: USERS (Admin only)
+        // 5. TAB: USERS (Admin only)
         else if (btn.classList.contains('btn-reset-pass')) {
             const username = btn.getAttribute('data-username');
             if (username) window.handleResetUserPassword(username);
@@ -1322,7 +1352,10 @@ async function handleAddSales(e) {
     const filename = filenameRaw || `${accPart}_${fulPart}_${sku}_${ordPart}`;
 
     if (!account) { showError('Vui lòng chọn Account!'); return; }
+    if (!fulfillment) { showError('Vui lòng nhập Fulfillment!'); return; }
+    if (!design_id) { showError('Vui lòng nhập Mã Design!'); return; }
     if (!sku) { showError('Vui lòng nhập mã SKU!'); return; }
+    if (!ord_id) { showError('Vui lòng nhập OrdID!'); return; }
     if (!date) { showError('Vui lòng chọn Ngày!'); return; }
 
     const payload = { account, fulfillment, design_id, sku, title, ord_id, custom, size, filename, sales, date };
@@ -1403,26 +1436,55 @@ function renderSalesTable() {
         tbody.innerHTML = '<tr><td colspan="12" style="text-align:center;color:gray;padding:20px;">Chưa có dữ liệu doanh số...</td></tr>';
         return;
     }
+    const tc = (val, maxW) => {
+        const style = `max-width:${maxW || 90}px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;`;
+        const escapedVal = String(val || '').replace(/'/g, "\\'");
+        return val ? `
+            <td style="${style}" 
+                title="Click để copy: ${val}" 
+                onclick="copyToClipboard('${escapedVal}', this)">
+                ${val}
+            </td>
+        ` : `<td style="color:var(--text-secondary)">—</td>`;
+    };
     data.forEach(s => {
         const tr = document.createElement('tr');
         const actions = isAdmin ? `
-            <button class="btn-small btn-edit" onclick="openEditSales('${s.id}')">Sửa</button>
-            <button class="btn-small btn-danger" onclick="handleDeleteSales('${s.id}')">Xóa</button>
+            <button class="btn-small btn-edit btn-edit-sales" data-id="${s.id}">Sửa</button>
+            <button class="btn-small btn-danger btn-delete-sales" data-id="${s.id}">Xóa</button>
         ` : `<span style="color:gray;font-size:0.8em">—</span>`;
-        const cell = (val) => val ? `<td>${val}</td>` : `<td style="color:var(--text-secondary)">—</td>`;
+
+        const filenameCell = s.filename ? `
+            <td style="max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;color:var(--primary-color);" 
+                title="Click để copy: ${s.filename}" 
+                onclick="copyToClipboard('${s.filename.replace(/'/g, "\\'")}', this)">
+                ${s.filename}
+            </td>
+        ` : `<td style="color:var(--text-secondary)">—</td>`;
+
+        const valDate = String(s.date || '').replace(/'/g, "\\'");
+        const valSku = String(s.sku || '').replace(/'/g, "\\'");
+        const valSales = String(s.sales || '').replace(/'/g, "\\'");
+
         tr.innerHTML = `
-            <td><span class="date-text">${s.date}</span></td>
-            <td>${s.account}</td>
-            ${cell(s.fulfillment)}
-            ${cell(s.design_id)}
-            <td><span class="sku-tag">${s.sku}</span></td>
-            <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${s.title || ''}">${s.title || '<span style="color:var(--text-secondary)">—</span>'}</td>
-            ${cell(s.ord_id)}
-            ${cell(s.custom)}
-            ${cell(s.size)}
-            <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${s.filename || ''}">${s.filename || '<span style="color:var(--text-secondary)">—</span>'}</td>
-            <td><span class="units-badge">${s.sales}</span></td>
-            <td>${actions}</td>
+            <td style="white-space:nowrap;cursor:pointer;" title="Click để copy: ${s.date}" onclick="copyToClipboard('${valDate}', this)">
+                <span class="date-text">${s.date}</span>
+            </td>
+            ${tc(s.account, 80)}
+            ${tc(s.fulfillment, 70)}
+            ${tc(s.design_id, 90)}
+            <td style="white-space:nowrap;cursor:pointer;" title="Click để copy: ${s.sku}" onclick="copyToClipboard('${valSku}', this)">
+                <span class="sku-tag">${s.sku}</span>
+            </td>
+            ${tc(s.title, 140)}
+            ${tc(s.ord_id, 80)}
+            ${tc(s.custom, 70)}
+            ${tc(s.size, 45)}
+            ${filenameCell}
+            <td style="white-space:nowrap;cursor:pointer;" title="Click để copy: ${s.sales}" onclick="copyToClipboard('${valSales}', this)">
+                <span class="units-badge">${s.sales}</span>
+            </td>
+            <td style="white-space:nowrap;">${actions}</td>
         `;
         tbody.appendChild(tr);
     });
@@ -1458,15 +1520,43 @@ window.openEditSales = function(id) {
     window.scrollTo({ top: 0, behavior: 'smooth' });
 };
 
-window.handleDeleteSales = async function(id) {
-    if (!confirm('Xác nhận xóa bản ghi này?')) return;
-    try {
-        await SalesAPI.delete(id);
-        cachedSales = await SalesAPI.getAll();
-        renderSalesTable();
-        renderStatistics();
-        updateTopbar('sales-tab');
-    } catch (err) { showError(err.message); }
+// Store pending sales delete ID for modal confirmation
+let _pendingSalesDeleteId = null;
+
+window.handleDeleteSales = function(id) {
+    _pendingSalesDeleteId = id;
+    const entry = cachedSales.find(s => s.id === id);
+    const label = entry ? `bản ghi SKU "${entry.sku}" (${entry.date})` : 'bản ghi này';
+    DOM.confirmDeleteMsg.textContent = `Bạn có chắc muốn xóa ${label}? Hành động này không thể hoàn tác.`;
+    // Override confirm button to handle sales delete
+    const btnConfirm = DOM.btnConfirmDelete;
+    const handler = async () => {
+        if (!_pendingSalesDeleteId) return;
+        try {
+            await SalesAPI.delete(_pendingSalesDeleteId);
+            _pendingSalesDeleteId = null;
+            cachedSales = await SalesAPI.getAll();
+            closeAllModals();
+            renderSalesTable();
+            renderStatistics();
+            updateTopbar('sales-tab');
+            // Show success feedback
+            const msgEl = document.getElementById('sales-form-msg');
+            if (msgEl) {
+                msgEl.textContent = '✅ Đã xóa bản ghi thành công!';
+                setTimeout(() => { msgEl.textContent = ''; }, 3000);
+            }
+        } catch (err) {
+            showError(err.message);
+        }
+        btnConfirm.removeEventListener('click', handler);
+    };
+    // Remove old listeners by cloning
+    const newBtn = btnConfirm.cloneNode(true);
+    btnConfirm.parentNode.replaceChild(newBtn, btnConfirm);
+    DOM.btnConfirmDelete = newBtn;
+    newBtn.addEventListener('click', handler);
+    openModal(DOM.modalConfirmDelete);
 };
 
 // ====== STATISTICS ======
@@ -1597,6 +1687,48 @@ function setupSalesListeners() {
     document.getElementById('sales-filter-date').addEventListener('change', renderSalesTable);
 
     document.getElementById('sales-date').value = new Date().toISOString().split('T')[0];
+
+    // Cancel edit mode
+    document.getElementById('btn-cancel-edit-sales')?.addEventListener('click', () => {
+        document.getElementById('edit-sales-id-inline').value = '';
+        document.getElementById('add-sales-form').reset();
+        document.getElementById('sales-date').value = new Date().toISOString().split('T')[0];
+        document.getElementById('btn-save-sales').innerHTML = '💾 Lưu Dữ Liệu';
+        document.getElementById('btn-cancel-edit-sales').classList.add('hidden');
+        updateFilenamePreview();
+    });
+
+    // Real-time filename preview
+    const previewFields = ['sales-account', 'sales-fulfillment', 'sales-sku', 'sales-ord-id', 'sales-filename'];
+    previewFields.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.addEventListener('input', updateFilenamePreview);
+            el.addEventListener('change', updateFilenamePreview);
+        }
+    });
+}
+
+function updateFilenamePreview() {
+    const previewEl = document.getElementById('filename-preview');
+    if (!previewEl) return;
+
+    const filenameVal = (document.getElementById('sales-filename')?.value || '').trim();
+    if (filenameVal) {
+        previewEl.textContent = '';
+        return;
+    }
+
+    const acc = (document.getElementById('sales-account')?.value || '').trim().slice(0, 3);
+    const ful = (document.getElementById('sales-fulfillment')?.value || '').trim().slice(0, 2);
+    const sku = (document.getElementById('sales-sku')?.value || '').trim().toUpperCase();
+    const ord = (document.getElementById('sales-ord-id')?.value || '').trim().slice(-4);
+
+    if (acc || ful || sku || ord) {
+        previewEl.textContent = `→ ${acc}_${ful}_${sku}_${ord}`;
+    } else {
+        previewEl.textContent = '→ [3 Account]_[2 Ful]_[SKU]_[4 OrdID]';
+    }
 }
 
 // ====== OVERRIDE INIT TO INCLUDE NEW MODULES ======

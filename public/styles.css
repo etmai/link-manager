@@ -832,3 +832,172 @@ select#task-assignee-input option {
     font-weight: bold;
     text-transform: uppercase;
 }
+
+/* ======== SALES QUANTITY SPINNER ======== */
+.sales-qty-spinner {
+    display: flex;
+    align-items: stretch;
+    height: 42px;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(0, 0, 0, 0.2);
+}
+
+.sales-qty-spinner .qty-btn {
+    width: 36px;
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--text-secondary);
+    border: none;
+    cursor: pointer;
+    font-weight: 700;
+    font-size: 1.2em;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.sales-qty-spinner .qty-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+    color: var(--text-primary);
+}
+
+.sales-qty-spinner .qty-minus:hover {
+    background: rgba(239, 68, 68, 0.2);
+    color: #f87171;
+}
+
+.sales-qty-spinner .qty-plus:hover {
+    background: rgba(16, 185, 129, 0.2);
+    color: #34d399;
+}
+
+.sales-qty-spinner .qty-btn:active {
+    transform: scale(0.92);
+}
+
+.sales-qty-spinner input[type="number"] {
+    flex: 1;
+    min-width: 0;
+    text-align: center;
+    border: none !important;
+    border-left: 1px solid rgba(255, 255, 255, 0.08) !important;
+    border-right: 1px solid rgba(255, 255, 255, 0.08) !important;
+    border-radius: 0 !important;
+    padding: 0 4px !important;
+    background: transparent !important;
+    font-weight: 700;
+    font-size: 1.05em;
+    color: #34d399;
+    -webkit-appearance: none;
+    -moz-appearance: textfield;
+}
+
+/* ======== SALES FORM ENHANCEMENTS ======== */
+#add-sales-form .form-row {
+    margin-bottom: 16px;
+}
+
+#add-sales-form .input-group label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.tag-warning {
+    background: rgba(245, 158, 11, 0.15);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+/* Stat card styles */
+.stat-card {
+    background: var(--panel-bg);
+    border: 1px solid var(--panel-border);
+    border-radius: 12px;
+    backdrop-filter: blur(16px);
+}
+
+.stat-title {
+    color: var(--text-secondary);
+    font-size: 0.8em;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+}
+
+.stat-val {
+    font-size: 2em;
+    font-weight: 700;
+    color: #60a5fa;
+}
+
+/* ======== SALES COMPACT TABLE ======== */
+.sales-compact-table {
+    table-layout: fixed;
+    width: 100%;
+}
+
+.sales-compact-table th,
+.sales-compact-table td {
+    padding: 10px 8px;
+    font-size: 0.82em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Column widths — total ~100% */
+.sales-compact-table th:nth-child(1),
+.sales-compact-table td:nth-child(1) { width: 8%; }   /* Date */
+.sales-compact-table th:nth-child(2),
+.sales-compact-table td:nth-child(2) { width: 9%; }   /* Account */
+.sales-compact-table th:nth-child(3),
+.sales-compact-table td:nth-child(3) { width: 6%; }   /* Ful. */
+.sales-compact-table th:nth-child(4),
+.sales-compact-table td:nth-child(4) { width: 9%; }   /* Design */
+.sales-compact-table th:nth-child(5),
+.sales-compact-table td:nth-child(5) { width: 9%; }   /* SKU */
+.sales-compact-table th:nth-child(6),
+.sales-compact-table td:nth-child(6) { width: 16%; }  /* Title */
+.sales-compact-table th:nth-child(7),
+.sales-compact-table td:nth-child(7) { width: 8%; }   /* OrdID */
+.sales-compact-table th:nth-child(8),
+.sales-compact-table td:nth-child(8) { width: 7%; }   /* Custom */
+.sales-compact-table th:nth-child(9),
+.sales-compact-table td:nth-child(9) { width: 5%; }   /* Size */
+.sales-compact-table th:nth-child(10),
+.sales-compact-table td:nth-child(10) { width: 9%; }  /* File */
+.sales-compact-table th:nth-child(11),
+.sales-compact-table td:nth-child(11) { width: 5%; }  /* Sale */
+.sales-compact-table th:nth-child(12),
+.sales-compact-table td:nth-child(12) { width: 9%; }  /* Actions */
+
+.sales-compact-table td {
+    cursor: default;
+}
+
+.sales-compact-table .sku-tag {
+    font-size: 0.85em;
+    padding: 2px 5px;
+}
+
+.sales-compact-table .units-badge {
+    font-size: 0.85em;
+    padding: 2px 8px;
+}
+
+/* Hover effect for all copyable cells in sales table */
+.sales-compact-table tbody td:not(:last-child):hover {
+    text-decoration: underline;
+    opacity: 0.8;
+    cursor: pointer;
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.sales-compact-table .btn-small {
+    padding: 4px 8px;
+    font-size: 0.8em;
+    margin-right: 2px;
+}

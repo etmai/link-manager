@@ -575,8 +575,8 @@ app.post('/api/sales', authenticateToken, requireAdmin, async (req, res) => {
     const id = randomUUID();
     try {
         await db.run(
-            'INSERT INTO sales_entries (id, account, fulfillment, design_id, sku, title, ord_id, custom, size, filename, sales, date, createdAt, addedBy) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-            [id, account, fulfillment, design_id, sku, title, ord_id, custom, size, filename, salesNum, date, new Date().toISOString(), req.user.username]
+            'INSERT INTO sales_entries (id, account, merchant, category, fulfillment, design_id, sku, title, ord_id, custom, size, filename, sales, date, createdAt, addedBy) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [id, account, '', '', fulfillment, design_id, sku, title, ord_id, custom, size, filename, salesNum, date, new Date().toISOString(), req.user.username]
         );
         res.json({ success: true, id });
     } catch (error) {
@@ -606,8 +606,8 @@ app.put('/api/sales/:id', authenticateToken, requireAdmin, async (req, res) => {
 
     try {
         await db.run(
-            'UPDATE sales_entries SET account=?, fulfillment=?, design_id=?, sku=?, title=?, ord_id=?, custom=?, size=?, filename=?, sales=?, date=? WHERE id=?',
-            [account, fulfillment, design_id, sku, title, ord_id, custom, size, filename, salesNum, date, id]
+            'UPDATE sales_entries SET account=?, merchant=?, category=?, fulfillment=?, design_id=?, sku=?, title=?, ord_id=?, custom=?, size=?, filename=?, sales=?, date=? WHERE id=?',
+            [account, '', '', fulfillment, design_id, sku, title, ord_id, custom, size, filename, salesNum, date, id]
         );
         res.json({ success: true });
     } catch (error) {

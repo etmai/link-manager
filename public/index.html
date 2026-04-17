@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dinoz Sale — Hệ Thống Quản Lý Toàn Diện</title>
     <meta name="description" content="Hệ thống quản lý link và theo dõi doanh số sản phẩm Dinoz Sale">
-    <link rel="stylesheet" href="styles.css?v=4.7">
+    <link rel="stylesheet" href="styles.css?v=5.1">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
 </head>
@@ -270,98 +270,109 @@
                         <h3>🛍️ Nhập Dữ Liệu Doanh Số</h3>
                         <form id="add-sales-form" novalidate>
                             <input type="hidden" id="edit-sales-id-inline" value="">
-                            <div class="form-row" style="flex-wrap: wrap;">
-                                <div class="input-group" style="flex: 0.8; min-width: 120px;">
-                                    <label>Ngày</label>
+
+                            <!-- ROW 1: Date, Account, Fulfillment, Mã Design -->
+                            <div class="form-row" style="flex-wrap: wrap; gap: 12px;">
+                                <div class="input-group" style="flex: 0.7; min-width: 140px;">
+                                    <label>📅 Date</label>
                                     <input type="date" id="sales-date" required>
                                 </div>
-                                <div class="input-group flex-1" style="min-width: 150px;">
-                                    <label>Account</label>
-                                    <select id="sales-account" required><option value="">-- Chọn Account --</option></select>
+                                <div class="input-group" style="flex: 1; min-width: 160px;">
+                                    <label>👥 Account <span style="color:#ef4444;">*</span></label>
+                                    <select id="sales-account" required>
+                                        <option value="">-- Chọn Account --</option>
+                                    </select>
                                 </div>
-                                <div class="input-group flex-1" style="min-width: 150px;">
-                                    <label>Fulfillment</label>
-                                    <input type="text" id="sales-fulfillment" placeholder="VD: FBA, FBM...">
+                                <div class="input-group" style="flex: 1; min-width: 150px;">
+                                    <label>📦 Fulfillment <span style="color:#ef4444;">*</span></label>
+                                    <input type="text" id="sales-fulfillment" placeholder="VD: FBA, FBM..." required>
                                 </div>
-                                <div class="input-group flex-1" style="min-width: 150px;">
-                                    <label>Mã Design</label>
-                                    <input type="text" id="sales-design-id" placeholder="VD: DES-001">
+                                <div class="input-group" style="flex: 1; min-width: 150px;">
+                                    <label>🎨 Mã Design <span style="color:#ef4444;">*</span></label>
+                                    <input type="text" id="sales-design-id" placeholder="VD: DES-001" required>
                                 </div>
                             </div>
-                            <div class="form-row" style="flex-wrap: wrap;">
-                                <div class="input-group" style="flex: 1.5; min-width: 200px;">
-                                    <label>SKU</label>
-                                    <div style="display:flex; gap:8px;">
-                                        <input type="text" id="sales-sku" placeholder="VD: B07FZ8S74R" required style="flex:1; text-transform:uppercase;">
-                                        <button type="button" id="btn-scan-sku" class="btn-primary" style="white-space:nowrap; padding: 0 16px;">
+
+                            <!-- ROW 2: SKU + Scan, Title -->
+                            <div class="form-row" style="flex-wrap: wrap; gap: 12px;">
+                                <div class="input-group" style="flex: 1.2; min-width: 220px;">
+                                    <label>🏷️ SKU <span style="color:#ef4444;">*</span></label>
+                                    <div style="display: flex; gap: 8px; align-items: stretch;">
+                                        <input type="text" id="sales-sku" placeholder="VD: B07FZ8S74R" required style="flex: 1; text-transform: uppercase;">
+                                        <button type="button" id="btn-scan-sku" class="btn-primary" style="white-space: nowrap; padding: 0 18px; display: flex; align-items: center; gap: 4px;">
                                             <span id="scan-btn-text">🔍 Quét</span>
                                             <span id="scan-btn-loader" class="hidden">⏳</span>
                                         </button>
                                     </div>
                                 </div>
-                                <div class="input-group flex-2" style="min-width: 260px;">
-                                    <label>Title (Tự động quét)</label>
-                                    <input type="text" id="sales-title" placeholder="Nhấn Quét SKU để lấy tiêu đề..." style="background: rgba(16,185,129,0.05);">
+                                <div class="input-group" style="flex: 2; min-width: 280px;">
+                                    <label>📝 Title <span style="font-size: 0.8em; opacity: 0.6;">(Tự động quét từ SKU)</span></label>
+                                    <input type="text" id="sales-title" placeholder="Nhấn nút Quét để tự động lấy tiêu đề..." style="background: rgba(16,185,129,0.06); border-color: rgba(16,185,129,0.2);">
                                 </div>
-                                <div class="input-group" style="flex: 1; max-width: 130px; min-width: 110px;">
-                                    <label>Sale</label>
-                                    <div class="custom-spinner">
-                                        <button type="button" onclick="adjustSalesQty(-1)">-</button>
+                            </div>
+
+                            <!-- ROW 3: OrdID, Custom, Size, Filename, Sale -->
+                            <div class="form-row" style="flex-wrap: wrap; gap: 12px;">
+                                <div class="input-group" style="flex: 1; min-width: 140px;">
+                                    <label>📋 OrdID <span style="color:#ef4444;">*</span></label>
+                                    <input type="text" id="sales-ord-id" placeholder="Mã đơn hàng" required>
+                                </div>
+                                <div class="input-group" style="flex: 1; min-width: 140px;">
+                                    <label>⚙️ Custom</label>
+                                    <input type="text" id="sales-custom" placeholder="Tuỳ chỉnh...">
+                                </div>
+                                <div class="input-group" style="flex: 0.7; min-width: 110px;">
+                                    <label>📐 Size <span style="font-size:0.75em; opacity:0.5;">(auto: N/A)</span></label>
+                                    <input type="text" id="sales-size" placeholder="Mặc định: N/A">
+                                </div>
+                                <div class="input-group" style="flex: 1.5; min-width: 180px;">
+                                    <label>📁 Filename <span style="font-size:0.75em; opacity:0.5;">(tự động sinh)</span></label>
+                                    <input type="text" id="sales-filename" placeholder="Tự động sinh khi bỏ trống...">
+                                    <div id="filename-preview" style="font-size:0.75em; color:#34d399; margin-top:4px; opacity:0.8; font-family:monospace; min-height:1em;"></div>
+                                </div>
+                                <div class="input-group" style="flex: 0.6; min-width: 120px;">
+                                    <label>💰 Sale</label>
+                                    <div class="sales-qty-spinner">
+                                        <button type="button" class="qty-btn qty-minus" onclick="adjustSalesQty(-1)">−</button>
                                         <input type="number" id="sales-qty" value="0" min="0" required>
-                                        <button type="button" onclick="adjustSalesQty(1)">+</button>
+                                        <button type="button" class="qty-btn qty-plus" onclick="adjustSalesQty(1)">+</button>
                                     </div>
                                 </div>
                             </div>
-                            <div class="form-row" style="flex-wrap: wrap;">
-                                <div class="input-group flex-1" style="min-width: 150px;">
-                                    <label>OrdID</label>
-                                    <input type="text" id="sales-ord-id" placeholder="Mã đơn hàng">
-                                </div>
-                                <div class="input-group flex-1" style="min-width: 150px;">
-                                    <label>Custom</label>
-                                    <input type="text" id="sales-custom" placeholder="Tuỳ chỉnh...">
-                                </div>
-                                <div class="input-group flex-1" style="min-width: 120px;">
-                                    <label>Size</label>
-                                    <input type="text" id="sales-size" placeholder="VD: S, M, L, XL...">
-                                </div>
-                                <div class="input-group flex-2" style="min-width: 200px;">
-                                    <label>Filename</label>
-                                    <input type="text" id="sales-filename" placeholder="Tên file thiết kế...">
-                                </div>
-                            </div>
-                            <div class="form-actions" style="justify-content: flex-end; gap: 12px; margin-top:20px;">
-                                <span id="sales-form-msg" style="color: var(--success-color); flex:1; text-align: left;"></span>
-                                <button type="button" class="btn-secondary hidden" id="btn-cancel-edit-sales">Trở Về Mặc Định (Thêm Mới)</button>
+
+                            <!-- ACTIONS -->
+                            <div class="form-actions" style="justify-content: flex-end; gap: 12px; margin-top: 24px;">
+                                <span id="sales-form-msg" style="color: var(--success-color); flex: 1; text-align: left;"></span>
+                                <button type="button" class="btn-secondary hidden" id="btn-cancel-edit-sales">↩ Trở Về Mặc Định</button>
                                 <button type="submit" class="btn-primary" id="btn-save-sales">💾 Lưu Dữ Liệu</button>
                             </div>
                         </form>
                     </div>
 
                     <div class="links-display-section glass-panel">
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
                             <h3>📋 Danh Sách Doanh Số</h3>
-                            <div style="display:flex; gap:10px;">
-                                <input type="text" id="sales-search" placeholder="Tìm kiếm..." style="width:200px;">
+                            <div style="display: flex; gap: 10px; align-items: center;">
+                                <input type="text" id="sales-search" placeholder="🔍 Tìm kiếm..." style="width: 200px;">
                                 <input type="date" id="sales-filter-date">
                             </div>
                         </div>
                         <div class="table-container">
-                            <table class="modern-table">
+                            <table class="modern-table sales-compact-table">
                                 <thead>
                                     <tr>
-                                        <th>Ngày</th>
+                                        <th>Date</th>
                                         <th>Account</th>
-                                        <th>Fulfillment</th>
-                                        <th>Mã Design</th>
+                                        <th>Ful.</th>
+                                        <th>Design</th>
                                         <th>SKU</th>
-                                        <th>Scan / Title</th>
+                                        <th>Title</th>
                                         <th>OrdID</th>
                                         <th>Custom</th>
                                         <th>Size</th>
-                                        <th>Filename</th>
+                                        <th>File</th>
                                         <th>Sale</th>
-                                        <th>Thao Tác</th>
+                                        <th></th>
                                     </tr>
                                 </thead>
                                 <tbody id="sales-table-body"></tbody>
@@ -638,7 +649,7 @@
         </div>
     </div>
     <!-- Bắt buộc load JS phiên bản mới (Bypass Cache) -->
-    <script src="app.js?v=10.6.0"></script>
+    <script src="app.js?v=11.4.0"></script>
 </body>
 
 </html>
