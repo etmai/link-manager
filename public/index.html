@@ -50,14 +50,8 @@
                         <button class="nav-tab active" data-tab="links-tab" id="nav-links">
                             <span class="nav-icon">🔗</span><span class="nav-label">Quản Lý Links</span>
                         </button>
-                        <button class="nav-tab" data-tab="accounts-tab" id="nav-accounts">
-                            <span class="nav-icon">👥</span><span class="nav-label">Quản Lý Account</span>
-                        </button>
-                        <button class="nav-tab" data-tab="merchants-tab" id="nav-merchants">
-                            <span class="nav-icon">🏪</span><span class="nav-label">Quản Lý Merchant</span>
-                        </button>
-                        <button class="nav-tab" data-tab="categories-tab" id="nav-categories">
-                            <span class="nav-icon">🏷️</span><span class="nav-label">Quản Lý Category</span>
+                        <button class="nav-tab" data-tab="settings-tab" id="nav-settings">
+                            <span class="nav-icon">⚙️</span><span class="nav-label">Cài Đặt Chung</span>
                         </button>
                         <button class="nav-tab" data-tab="schedule-tab" id="nav-schedule">
                             <span class="nav-icon">📅</span><span class="nav-label">Lịch Công Việc</span>
@@ -183,85 +177,90 @@
                 </div>
             </div>
 
-            <!-- ===== TAB: ACCOUNTS MANAGEMENT ===== -->
-            <div id="accounts-tab" class="tab-content">
+            <!-- ===== TAB: CÀI ĐẶT CHUNG (Account + Merchant + Category) ===== -->
+            <div id="settings-tab" class="tab-content">
                 <div class="content-wrapper">
-                    <div class="add-link-section glass-panel">
-                        <h3>👥 Quản Lý Account</h3>
-                        <form id="add-account-form">
-                            <div class="form-row">
-                                <div class="input-group flex-2">
-                                    <label>Tên Account mới</label>
-                                    <input type="text" id="new-account-name" placeholder="VD: Amazon_Prime_US" required>
-                                </div>
-                                <div class="form-actions" style="margin-top: 0;">
-                                    <button type="submit" class="btn-primary">Thêm Account</button>
-                                </div>
-                            </div>
-                        </form>
+                    <div class="settings-subtabs glass-panel">
+                        <button class="settings-subtab active" data-subtab="accounts-panel">👥 Account</button>
+                        <button class="settings-subtab" data-subtab="merchants-panel">🏪 Merchant</button>
+                        <button class="settings-subtab" data-subtab="categories-panel">🏷️ Category</button>
                     </div>
-                    <div class="links-display-section glass-panel">
-                        <div class="table-container">
-                            <table class="modern-table">
-                                <thead><tr><th>Tên Account</th><th style="width: 120px;">Hành Động</th></tr></thead>
-                                <tbody id="accounts-table-body"></tbody>
-                            </table>
+
+                    <!-- PANEL: ACCOUNTS -->
+                    <div id="accounts-panel" class="settings-panel active-panel">
+                        <div class="add-link-section glass-panel">
+                            <h3>👥 Quản Lý Account</h3>
+                            <form id="add-account-form">
+                                <div class="form-row">
+                                    <div class="input-group flex-2">
+                                        <label>Tên Account mới</label>
+                                        <input type="text" id="new-account-name" placeholder="VD: Amazon_Prime_US" required>
+                                    </div>
+                                    <div class="form-actions" style="margin-top: 0;">
+                                        <button type="submit" class="btn-primary">Thêm Account</button>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
+                        <div class="links-display-section glass-panel">
+                            <div class="table-container">
+                                <table class="modern-table">
+                                    <thead><tr><th>Tên Account</th><th style="width: 120px;">Hành Động</th></tr></thead>
+                                    <tbody id="accounts-table-body"></tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
-                </div>
-            </div>
 
-            <!-- ===== TAB: MERCHANTS MANAGEMENT ===== -->
-            <div id="merchants-tab" class="tab-content">
-                <div class="content-wrapper">
-                    <div class="add-link-section glass-panel">
-                        <h3>🏪 Quản Lý Merchant</h3>
-                        <form id="add-merchant-form">
-                            <div class="form-row">
-                                <div class="input-group flex-2">
-                                    <label>Tên Merchant mới</label>
-                                    <input type="text" id="new-merchant-name" placeholder="VD: Etsy_Shop_Global" required>
+                    <!-- PANEL: MERCHANTS -->
+                    <div id="merchants-panel" class="settings-panel">
+                        <div class="add-link-section glass-panel">
+                            <h3>🏪 Quản Lý Merchant</h3>
+                            <form id="add-merchant-form">
+                                <div class="form-row">
+                                    <div class="input-group flex-2">
+                                        <label>Tên Merchant mới</label>
+                                        <input type="text" id="new-merchant-name" placeholder="VD: Etsy_Shop_Global" required>
+                                    </div>
+                                    <div class="form-actions" style="margin-top: 0;">
+                                        <button type="submit" class="btn-primary">Thêm Merchant</button>
+                                    </div>
                                 </div>
-                                <div class="form-actions" style="margin-top: 0;">
-                                    <button type="submit" class="btn-primary">Thêm Merchant</button>
-                                </div>
+                            </form>
+                        </div>
+                        <div class="links-display-section glass-panel">
+                            <div class="table-container">
+                                <table class="modern-table">
+                                    <thead><tr><th>Tên Merchant</th><th style="width: 120px;">Hành Động</th></tr></thead>
+                                    <tbody id="merchants-table-body"></tbody>
+                                </table>
                             </div>
-                        </form>
-                    </div>
-                    <div class="links-display-section glass-panel">
-                        <div class="table-container">
-                            <table class="modern-table">
-                                <thead><tr><th>Tên Merchant</th><th style="width: 120px;">Hành Động</th></tr></thead>
-                                <tbody id="merchants-table-body"></tbody>
-                            </table>
                         </div>
                     </div>
-                </div>
-            </div>
 
-            <!-- ===== TAB: CATEGORIES MANAGEMENT ===== -->
-            <div id="categories-tab" class="tab-content">
-                <div class="content-wrapper">
-                    <div class="add-link-section glass-panel">
-                        <h3>🏷️ Quản Lý Category</h3>
-                        <form id="add-category-full-form">
-                            <div class="form-row">
-                                <div class="input-group flex-2">
-                                    <label>Tên Category mới</label>
-                                    <input type="text" id="new-category-full-name" placeholder="VD: Phụ kiện điện thoại" required>
+                    <!-- PANEL: CATEGORIES -->
+                    <div id="categories-panel" class="settings-panel">
+                        <div class="add-link-section glass-panel">
+                            <h3>🏷️ Quản Lý Category</h3>
+                            <form id="add-category-full-form">
+                                <div class="form-row">
+                                    <div class="input-group flex-2">
+                                        <label>Tên Category mới</label>
+                                        <input type="text" id="new-category-full-name" placeholder="VD: Phụ kiện điện thoại" required>
+                                    </div>
+                                    <div class="form-actions" style="margin-top: 0;">
+                                        <button type="submit" class="btn-primary">Thêm Category</button>
+                                    </div>
                                 </div>
-                                <div class="form-actions" style="margin-top: 0;">
-                                    <button type="submit" class="btn-primary">Thêm Category</button>
-                                </div>
+                            </form>
+                        </div>
+                        <div class="links-display-section glass-panel">
+                            <div class="table-container">
+                                <table class="modern-table">
+                                    <thead><tr><th>Tên Category</th><th style="width: 120px;">Hành Động</th></tr></thead>
+                                    <tbody id="categories-table-body"></tbody>
+                                </table>
                             </div>
-                        </form>
-                    </div>
-                    <div class="links-display-section glass-panel">
-                        <div class="table-container">
-                            <table class="modern-table">
-                                <thead><tr><th>Tên Category</th><th style="width: 120px;">Hành Động</th></tr></thead>
-                                <tbody id="categories-table-body"></tbody>
-                            </table>
                         </div>
                     </div>
                 </div>
@@ -821,7 +820,7 @@
         </div>
     </div>
     <!-- Bắt buộc load JS phiên bản mới (Bypass Cache) -->
-    <script src="app.js?v=11.4.0"></script>
+    <script src="app.js?v=11.5.0"></script>
 </body>
 
 </html>

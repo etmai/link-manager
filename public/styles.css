@@ -543,6 +543,45 @@ textarea { resize: vertical; min-height: 80px; }
     border: 1px solid rgba(16,185,129,0.25);
 }
 
+/* ======== SETTINGS SUB-TABS ======== */
+.settings-subtabs {
+    display: flex;
+    gap: 6px;
+    padding: 8px 12px;
+    margin-bottom: 20px;
+    border-radius: 12px;
+    flex-wrap: wrap;
+}
+.settings-subtab {
+    padding: 8px 20px;
+    border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.12);
+    background: rgba(255,255,255,0.05);
+    color: var(--text-secondary);
+    font-size: 0.9em;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+.settings-subtab:hover {
+    background: rgba(59,130,246,0.15);
+    color: var(--text-primary);
+    border-color: rgba(59,130,246,0.3);
+}
+.settings-subtab.active {
+    background: var(--accent-color);
+    color: white;
+    border-color: var(--accent-color);
+}
+.settings-panel {
+    display: none;
+    flex-direction: column;
+    gap: 20px;
+}
+.settings-panel.active-panel {
+    display: flex;
+}
+
 /* ======== FINANCE FORM GRID ======== */
 .fin-fields-grid {
     display: grid;

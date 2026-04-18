@@ -414,9 +414,7 @@ function showDashboard(user) {
 
     if (user.role === 'admin') {
         DOM.adminMenu.classList.remove('hidden');
-        document.getElementById('nav-accounts')?.classList.remove('hidden');
-        document.getElementById('nav-merchants')?.classList.remove('hidden');
-        document.getElementById('nav-categories')?.classList.remove('hidden');
+        document.getElementById('nav-settings')?.classList.remove('hidden');
         document.getElementById('nav-sales')?.classList.remove('hidden');
         document.getElementById('nav-finance')?.classList.remove('hidden');
 
@@ -424,9 +422,7 @@ function showDashboard(user) {
         DOM.assigneeGroup?.classList.remove('hidden');
     } else {
         DOM.adminMenu.classList.add('hidden');
-        document.getElementById('nav-accounts')?.classList.add('hidden');
-        document.getElementById('nav-merchants')?.classList.add('hidden');
-        document.getElementById('nav-categories')?.classList.add('hidden');
+        document.getElementById('nav-settings')?.classList.add('hidden');
         document.getElementById('nav-sales')?.classList.add('hidden');
         document.getElementById('nav-finance')?.classList.add('hidden');
 
@@ -434,7 +430,7 @@ function showDashboard(user) {
         DOM.assigneeGroup?.classList.add('hidden');
 
         const activeTab = document.querySelector('.nav-tab.active')?.dataset?.tab;
-        if (['accounts-tab', 'merchants-tab', 'categories-tab', 'sales-tab', 'finance-tab'].includes(activeTab)) {
+        if (['settings-tab', 'sales-tab', 'finance-tab'].includes(activeTab)) {
             document.querySelector('[data-tab="links-tab"]')?.click();
         }
     }
@@ -748,6 +744,19 @@ function setupEventListeners() {
             
             // Action: Update Topbar and Render
             updateTopbar(targetId);
+            return;
+        }
+
+        // 1b. XỬ LÝ CHUYỂN SUB-TAB (settings-subtab)
+        const subTabBtn = target.closest('.settings-subtab');
+        if (subTabBtn) {
+            const panelId = subTabBtn.dataset.subtab;
+            if (!panelId) return;
+            document.querySelectorAll('.settings-subtab').forEach(b => b.classList.remove('active'));
+            subTabBtn.classList.add('active');
+            document.querySelectorAll('.settings-panel').forEach(p => p.classList.remove('active-panel'));
+            const panel = document.getElementById(panelId);
+            if (panel) panel.classList.add('active-panel');
             return;
         }
 
@@ -1250,14 +1259,10 @@ function updateTopbar(tabId) {
         exportBtn.classList.remove('hidden');
         statsEl.classList.remove('hidden');
         renderAppContent();
-    } else if (tabId === 'accounts-tab') {
-        titleEl.textContent = '👥 Quản Lý Account';
+    } else if (tabId === 'settings-tab') {
+        titleEl.textContent = '⚙️ Cài Đặt Chung';
         renderAccountsTable();
-    } else if (tabId === 'merchants-tab') {
-        titleEl.textContent = '🏪 Quản Lý Merchant';
         renderMerchantsTable();
-    } else if (tabId === 'categories-tab') {
-        titleEl.textContent = '🏷️ Quản Lý Category';
         renderCategoriesFullTable();
     } else if (tabId === 'sales-tab') {
         titleEl.textContent = '🛍️ Nhập Sales';
