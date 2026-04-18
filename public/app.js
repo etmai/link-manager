@@ -1654,13 +1654,14 @@ function renderTopProducts(tbodyId, data) {
     data.forEach(s => {
         if (!grouped[s.sku]) grouped[s.sku] = { sku: s.sku, title: s.title || s.sku, design_id: s.design_id, total: 0 };
         grouped[s.sku].total += s.sales;
+        // Keep the latest design_id for that SKU if multiple exist
         if (s.design_id) grouped[s.sku].design_id = s.design_id;
     });
     const sorted = Object.values(grouped).sort((a, b) => b.total - a.total).slice(0, 10);
     const tbody = document.getElementById(tbodyId);
     tbody.innerHTML = '';
     if (sorted.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:gray;padding:20px;">Chưa có dữ liệu...</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:gray;padding:20px;">Chưa có dữ liệu...</td></tr>';
         return;
     }
     sorted.forEach((p) => {
@@ -1674,7 +1675,6 @@ function renderTopProducts(tbodyId, data) {
             <td><span class="sku-tag">${p.sku}</span></td>
             <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${p.title}">${p.title}</td>
             <td><span class="tag" style="background: rgba(96,165,250,0.1); color:#60a5fa; border-color:rgba(96,165,250,0.2);">${p.design_id || 'N/A'}</span></td>
-            <td><span class="units-badge">${p.total}</span></td>
             <td>${linkHtml}</td>
         `;
         tbody.appendChild(tr);
@@ -1725,22 +1725,10 @@ function renderSalesChart() {
         wrap.className = 'chart-bar-wrap';
         wrap.style.flex = `0 0 ${barWidth - gap}px`;
         wrap.style.maxWidth = `${barWidth - gap}px`;
-
-        const bar = document.createElement('div');
-        bar.className = 'chart-bar';
-        bar.style.height = `${Math.max(heightPct, 2)}%`;
-
-        const tooltip = document.createElement('div');
-        tooltip.className = 'chart-tooltip';
-        tooltip.innerHTML = `<span class="chart-tooltip-date">${d.day}</span><span class="chart-tooltip-val">${d.total} đơn</span>`;
-        bar.appendChild(tooltip);
-
-        const valueLabel = document.createElement('div');
-        valueLabel.className = 'chart-bar-value';
-        valueLabel.textContent = d.total > 0 ? d.total : '';
-
-        wrap.appendChild(valueLabel);
-        wrap.appendChild(bar);
+        wrap.innerHTML = `
+            <div class="chart-bar-value">${d.total > 0 ? d.total : ''}</div>
+            <div class="chart-bar" style="height:${Math.max(heightPct, 2)}%" title="${d.day}: ${d.total} đơn"></div>
+        `;
         chartEl.appendChild(wrap);
 
         const lbl = document.createElement('div');
