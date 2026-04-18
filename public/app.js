@@ -1596,12 +1596,37 @@ window.handleDeleteSales = function(id) {
 
 // ====== STATISTICS ======
 let currentChartRange = 7;
+let customChartStart = null;
+let customChartEnd = null;
 
 window.setChartRange = function(days) {
-    currentChartRange = days;
+    if (days === 'custom') {
+        document.getElementById('custom-chart-range-container').style.display = 'flex';
+        return;
+    }
+    document.getElementById('custom-chart-range-container').style.display = 'none';
+    currentChartRange = parseInt(days);
+    customChartStart = null;
+    customChartEnd = null;
     // Sync the select element
     const sel = document.getElementById('chart-range-select');
     if (sel) sel.value = String(days);
+    renderSalesChart();
+};
+
+window.applyCustomChartRange = function() {
+    const start = document.getElementById('chart-start-date').value;
+    const end = document.getElementById('chart-end-date').value;
+    if (!start || !end) return alert("Vui lòng chọn đầy đủ ngày bắt đầu và kết thúc.");
+    if (new Date(start) > new Date(end)) return alert("Ngày bắt đầu không được lớn hơn ngày kết thúc.");
+    
+    const diffTime = Math.abs(new Date(end) - new Date(start));
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+    if (diffDays > 180) return alert("Chỉ hỗ trợ xem tối đa 180 ngày.");
+
+    currentChartRange = 'custom';
+    customChartStart = start;
+    customChartEnd = end;
     renderSalesChart();
 };
 
@@ -1682,18 +1707,29 @@ function renderTopProducts(tbodyId, data) {
 }
 
 function renderSalesChart() {
-    const chartEl = document.getElementById('sales-chart');
+    const chartAreaEl = document.getElementById('sales-chart');
     const labelsEl = document.getElementById('sales-chart-labels');
+    const yaxisEl = document.getElementById('sales-chart-yaxis');
+    const gridEl = document.getElementById('sales-chart-grid');
     const wrapperEl = document.getElementById('sales-chart-wrapper');
-    if (!chartEl || !labelsEl) return;
+    
+    if (!chartAreaEl || !labelsEl || !yaxisEl) return;
 
-    const range = currentChartRange || 7;
-    const today = new Date();
-    const days = [];
-    for (let i = range - 1; i >= 0; i--) {
-        const d = new Date(today);
-        d.setDate(today.getDate() - i);
-        days.push(d.toISOString().split('T')[0]);
+    let days = [];
+    if (currentChartRange === 'custom' && customChartStart && customChartEnd) {
+        const startD = new Date(customChartStart);
+        const endD = new Date(customChartEnd);
+        for (let d = new Date(startD); d <= endD; d.setDate(d.getDate() + 1)) {
+            days.push(d.toISOString().split('T')[0]);
+        }
+    } else {
+        const range = typeof currentChartRange === 'number' ? currentChartRange : 7;
+        const today = new Date();
+        for (let i = range - 1; i >= 0; i--) {
+            const d = new Date(today);
+            d.setDate(today.getDate() - i);
+            days.push(d.toISOString().split('T')[0]);
+        }
     }
 
     const dayTotals = days.map(day => ({
@@ -1701,36 +1737,63 @@ function renderSalesChart() {
         label: day.slice(5).replace('-', '/'),
         total: cachedSales.filter(s => s.date === day).reduce((a, s) => a + s.sales, 0)
     }));
-    const max = Math.max(...dayTotals.map(d => d.total), 1);
+    
+    // Y-Axis Max calculation
+    let max = Math.max(...dayTotals.map(d => d.total), 5); // Ensure a baseline max
+    max = Math.ceil(max / 5) * 5; // Round to nearest 5 for clean Y-axis ticks
 
-    chartEl.innerHTML = '';
+    // Render Y-axis
+    yaxisEl.innerHTML = '';
+    if(gridEl) gridEl.innerHTML = '';
+    
+    const tickCount = 5;
+    for (let i = tickCount; i >= 0; i--) {
+        const val = Math.round((max / tickCount) * i);
+        
+        // Add Y-axis label
+        const tick = document.createElement('div');
+        tick.className = 'yaxis-tick';
+        tick.textContent = val;
+        yaxisEl.appendChild(tick);
+        
+        // Add Grid line
+        if(gridEl) {
+            const line = document.createElement('div');
+            line.className = 'grid-line';
+            gridEl.appendChild(line);
+        }
+    }
+
+    chartAreaEl.innerHTML = '';
     labelsEl.innerHTML = '';
 
-    // Auto-calculate bar width based on range and container size
-    const containerWidth = wrapperEl ? wrapperEl.clientWidth - 24 : 600;
-    const minBarWidth = range <= 7 ? 48 : range <= 14 ? 36 : 26;
-    const barWidth = Math.max(Math.floor(containerWidth / range), minBarWidth);
-    const totalChartWidth = barWidth * range;
+    const rangeLength = days.length;
+    const containerWidth = wrapperEl ? wrapperEl.clientWidth - 50 : 600; // Account for Y-axis space
+    const minBarWidth = rangeLength <= 7 ? 48 : rangeLength <= 14 ? 36 : 24;
     const gap = 6;
-
-    // Set the chart/labels to the computed width so they can scroll if needed
-    const chartWidth = Math.max(totalChartWidth, containerWidth);
-    chartEl.style.width = chartWidth + 'px';
-    labelsEl.style.width = chartWidth + 'px';
-    chartEl.style.minWidth = '';
+    
+    const barWidth = Math.max(Math.floor(containerWidth / rangeLength), minBarWidth);
+    const totalChartWidth = Math.max((barWidth * rangeLength), containerWidth);
+    
+    chartAreaEl.style.width = totalChartWidth + 'px';
+    labelsEl.style.width = totalChartWidth + 'px';
+    if(gridEl) gridEl.style.width = totalChartWidth + 'px';
 
     dayTotals.forEach(d => {
         const heightPct = Math.round((d.total / max) * 100);
+        
+        // Render Bar Wrap
         const wrap = document.createElement('div');
         wrap.className = 'chart-bar-wrap';
         wrap.style.flex = `0 0 ${barWidth - gap}px`;
         wrap.style.maxWidth = `${barWidth - gap}px`;
         wrap.innerHTML = `
-            <div class="chart-bar-value">${d.total > 0 ? d.total : ''}</div>
-            <div class="chart-bar" style="height:${Math.max(heightPct, 2)}%" title="${d.day}: ${d.total} đơn"></div>
+            <div class="chart-bar-value" style="opacity: ${d.total > 0 ? 1 : 0}">${d.total}</div>
+            <div class="chart-bar" style="height:${Math.max(heightPct, 1)}%" title="${d.day}: ${d.total} đơn"></div>
         `;
-        chartEl.appendChild(wrap);
+        chartAreaEl.appendChild(wrap);
 
+        // Render Label
         const lbl = document.createElement('div');
         lbl.className = 'chart-label';
         lbl.style.flex = `0 0 ${barWidth - gap}px`;

@@ -387,41 +387,68 @@
             <div id="stats-tab" class="tab-content">
                 <div class="content-wrapper">
                     <div class="stats-cards-row" id="stats-summary-cards"></div>
+                    <div class="links-display-section glass-panel">
+                        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+                            <h3>📈 Xu Hướng Doanh Số</h3>
+                            <div style="display:flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+                                <div class="chart-range-selector">
+                                    <label class="chart-range-label">Thời gian:</label>
+                                    <select id="chart-range-select" class="chart-range-select" onchange="setChartRange(this.value)">
+                                        <option value="7">7 Ngày gần nhất</option>
+                                        <option value="14">14 Ngày gần nhất</option>
+                                        <option value="30">30 Ngày gần nhất</option>
+                                        <option value="custom">Tùy chỉnh...</option>
+                                    </select>
+                                </div>
+                                <div id="custom-chart-range-container" style="display: none; align-items: center; gap: 8px;">
+                                    <input type="date" id="chart-start-date" class="chart-range-select" style="min-width: 130px; padding: 4px 8px;">
+                                    <span>-</span>
+                                    <input type="date" id="chart-end-date" class="chart-range-select" style="min-width: 130px; padding: 4px 8px;">
+                                    <button type="button" class="btn-primary" onclick="applyCustomChartRange()" style="padding: 6px 12px; font-size: 0.8em; white-space: nowrap;">Áp dụng</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="sales-chart-wrapper" class="sales-chart-container" style="margin-top: 20px;">
+                            <!-- Y-axis + chart area -->
+                            <div class="sales-chart-inner">
+                                <div class="sales-chart-yaxis" id="sales-chart-yaxis"></div>
+                                <div class="sales-chart-area">
+                                    <div class="sales-chart-grid" id="sales-chart-grid"></div>
+                                    <div id="sales-chart" class="sales-chart-bars"></div>
+                                </div>
+                            </div>
+                            <!-- X-axis labels -->
+                            <div class="sales-chart-xaxis" id="sales-chart-labels"></div>
+                        </div>
+                    </div>
                     <div class="form-row" style="align-items:start; gap:20px; flex-wrap:wrap;">
-                        <div class="links-display-section glass-panel" style="flex:1; min-width:300px;">
+                        <div class="links-display-section glass-panel" style="flex:1; min-width:300px; width: 50%;">
                             <h3>🏆 Top Tuần</h3>
                             <div class="table-container" style="margin-top:16px;">
-                                <table class="modern-table">
-                                    <thead><tr><th>SKU</th><th>Tiêu Đề</th><th>Design</th><th>Link</th></tr></thead>
+                                <table class="modern-table" style="table-layout: fixed; width: 100%;">
+                                    <thead><tr>
+                                        <th style="width: 28%;">SKU</th>
+                                        <th style="width: 35%;">Tiêu Đề</th>
+                                        <th style="width: 25%;">Design</th>
+                                        <th style="width: 12%; text-align: center;">Link</th>
+                                    </tr></thead>
                                     <tbody id="top-weekly-body"></tbody>
                                 </table>
                             </div>
                         </div>
-                        <div class="links-display-section glass-panel" style="flex:1; min-width:300px;">
+                        <div class="links-display-section glass-panel" style="flex:1; min-width:300px; width: 50%;">
                             <h3>📅 Top Tháng</h3>
                             <div class="table-container" style="margin-top:16px;">
-                                <table class="modern-table">
-                                    <thead><tr><th>SKU</th><th>Tiêu Đề</th><th>Design</th><th>Link</th></tr></thead>
+                                <table class="modern-table" style="table-layout: fixed; width: 100%;">
+                                    <thead><tr>
+                                        <th style="width: 28%;">SKU</th>
+                                        <th style="width: 35%;">Tiêu Đề</th>
+                                        <th style="width: 25%;">Design</th>
+                                        <th style="width: 12%; text-align: center;">Link</th>
+                                    </tr></thead>
                                     <tbody id="top-monthly-body"></tbody>
                                 </table>
                             </div>
-                        </div>
-                    </div>
-                    <div class="links-display-section glass-panel">
-                        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
-                            <h3>📈 Xu Hướng Doanh Số</h3>
-                            <div class="chart-range-selector">
-                                <label class="chart-range-label">Thời gian:</label>
-                                <select id="chart-range-select" class="chart-range-select" onchange="setChartRange(parseInt(this.value))">
-                                    <option value="7">7 Ngày gần nhất</option>
-                                    <option value="14">14 Ngày gần nhất</option>
-                                    <option value="30">30 Ngày gần nhất</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div id="sales-chart-wrapper" style="margin-top: 20px; overflow-x: auto; width: 100%;">
-                            <div id="sales-chart" style="display:flex; align-items:flex-end; gap:6px; height:200px; padding-bottom: 5px; min-width: 100%;"></div>
-                            <div id="sales-chart-labels" style="display:flex; gap:6px; padding-top: 8px;"></div>
                         </div>
                     </div>
                 </div>

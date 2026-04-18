@@ -394,6 +394,84 @@ textarea { resize: vertical; min-height: 80px; }
 
 
 /* ======== BAR CHART ======== */
+.sales-chart-container {
+    display: flex;
+    flex-direction: column;
+    overflow-x: auto;
+    width: 100%;
+    position: relative;
+    padding-left: 45px;
+    padding-bottom: 25px;
+    height: 250px;
+}
+.sales-chart-inner {
+    position: relative;
+    flex: 1;
+    display: flex;
+}
+.sales-chart-yaxis {
+    position: absolute;
+    left: -45px;
+    top: 0;
+    bottom: 0;
+    width: 40px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    align-items: flex-end;
+    padding-right: 8px;
+    color: var(--text-secondary);
+    font-size: 0.7em;
+    font-family: monospace;
+    z-index: 2;
+}
+.yaxis-tick {
+    height: 0;
+    display: flex;
+    align-items: center;
+    transform: translateY(-50%);
+}
+.sales-chart-area {
+    position: relative;
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+}
+.sales-chart-grid {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    pointer-events: none;
+    z-index: 1;
+}
+.grid-line {
+    border-top: 1px dashed rgba(255, 255, 255, 0.08);
+    width: 100%;
+}
+.sales-chart-bars {
+    display: flex;
+    align-items: flex-end;
+    gap: 6px;
+    height: 100%;
+    min-width: 100%;
+    position: relative;
+    z-index: 2;
+}
+.sales-chart-xaxis {
+    position: absolute;
+    left: 45px;
+    bottom: 0;
+    display: flex;
+    gap: 6px;
+    padding-top: 5px;
+    z-index: 2;
+}
+
 .chart-bar-wrap {
     flex: 1;
     display: flex;
@@ -401,6 +479,8 @@ textarea { resize: vertical; min-height: 80px; }
     align-items: center;
     gap: 4px;
     min-width: 24px;
+    height: 100%;
+    justify-content: flex-end;
 }
 .chart-bar {
     width: 100%;
@@ -410,12 +490,17 @@ textarea { resize: vertical; min-height: 80px; }
     min-height: 2px;
     position: relative;
     cursor: default;
+    box-shadow: inset 0 -2px 5px rgba(0,0,0,0.2);
 }
-.chart-bar:hover { background: linear-gradient(to top, #2563eb, #93c5fd); }
+.chart-bar:hover { background: linear-gradient(to top, #2563eb, #93c5fd); filter: brightness(1.2); }
 .chart-bar-value {
     font-size: 0.68em;
     color: var(--text-secondary);
     text-align: center;
+    font-weight: 600;
+    pointer-events: none;
+    margin-bottom: -2px;
+    z-index: 10;
 }
 .chart-label { font-size: 0.68em; color: var(--text-secondary); text-align: center; flex: 1; min-width: 24px; }
 
