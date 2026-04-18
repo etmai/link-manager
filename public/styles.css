@@ -130,6 +130,7 @@ textarea { resize: vertical; min-height: 80px; }
 }
 .table-container { border-radius: 0 0 8px 8px; border: 1px solid rgba(255,255,255,0.05); overflow-x: auto;}
 .modern-table { width: 100%; border-collapse: collapse; text-align: left; background: rgba(0,0,0,0.1); }
+.modern-table.fixed-layout { table-layout: fixed; }
 .modern-table th { padding: 14px 16px; color: var(--text-secondary); font-weight: 600; font-size: 0.85em; text-transform: uppercase; background: rgba(0,0,0,0.2); }
 .modern-table td { padding: 16px; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 0.95em; line-height: 1.5; }
 .modern-table tr:last-child td { border-bottom: none; }
@@ -541,6 +542,22 @@ textarea { resize: vertical; min-height: 80px; }
     font-size: 0.9em;
     border: 1px solid rgba(16,185,129,0.25);
 }
+
+/* ======== TOP PRODUCTS TABLE COLUMNS ======== */
+.col-sku    { overflow: hidden; }
+.col-sku .sku-tag { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.col-title  { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.col-design { overflow: hidden; }
+.col-design .tag {
+    display: inline-block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: middle;
+}
+.col-sale   { text-align: center; white-space: nowrap; }
+.col-link   { text-align: center; white-space: nowrap; }
 
 /* ======== CUSTOM SPINNER ======== */
 .custom-spinner {

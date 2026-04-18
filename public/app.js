@@ -1686,7 +1686,7 @@ function renderTopProducts(tbodyId, data) {
     const tbody = document.getElementById(tbodyId);
     tbody.innerHTML = '';
     if (sorted.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:gray;padding:20px;">Chưa có dữ liệu...</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:gray;padding:20px;">Chưa có dữ liệu...</td></tr>';
         return;
     }
     sorted.forEach((p) => {
@@ -1697,10 +1697,11 @@ function renderTopProducts(tbodyId, data) {
 
         const tr = document.createElement('tr');
         tr.innerHTML = `
-            <td><span class="sku-tag">${p.sku}</span></td>
-            <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${p.title}">${p.title}</td>
-            <td><span class="tag" style="background: rgba(96,165,250,0.1); color:#60a5fa; border-color:rgba(96,165,250,0.2);">${p.design_id || 'N/A'}</span></td>
-            <td>${linkHtml}</td>
+            <td class="col-sku"><span class="sku-tag">${p.sku}</span></td>
+            <td class="col-title" title="${p.title}">${p.title}</td>
+            <td class="col-design" title="${p.design_id || 'N/A'}"><span class="tag" style="background: rgba(96,165,250,0.1); color:#60a5fa; border-color:rgba(96,165,250,0.2);">${p.design_id || 'N/A'}</span></td>
+            <td class="col-sale"><span class="units-badge">${p.total}</span></td>
+            <td class="col-link">${linkHtml}</td>
         `;
         tbody.appendChild(tr);
     });
