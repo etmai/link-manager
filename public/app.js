@@ -418,7 +418,8 @@ function showDashboard(user) {
         document.getElementById('nav-merchants')?.classList.remove('hidden');
         document.getElementById('nav-categories')?.classList.remove('hidden');
         document.getElementById('nav-sales')?.classList.remove('hidden');
-        
+        document.getElementById('nav-finance')?.classList.remove('hidden');
+
         DOM.adminCalendarFilters?.classList.remove('hidden');
         DOM.assigneeGroup?.classList.remove('hidden');
     } else {
@@ -427,12 +428,13 @@ function showDashboard(user) {
         document.getElementById('nav-merchants')?.classList.add('hidden');
         document.getElementById('nav-categories')?.classList.add('hidden');
         document.getElementById('nav-sales')?.classList.add('hidden');
-        
+        document.getElementById('nav-finance')?.classList.add('hidden');
+
         DOM.adminCalendarFilters?.classList.add('hidden');
         DOM.assigneeGroup?.classList.add('hidden');
-        
+
         const activeTab = document.querySelector('.nav-tab.active')?.dataset?.tab;
-        if (['accounts-tab', 'merchants-tab', 'categories-tab', 'sales-tab'].includes(activeTab)) {
+        if (['accounts-tab', 'merchants-tab', 'categories-tab', 'sales-tab', 'finance-tab'].includes(activeTab)) {
             document.querySelector('[data-tab="links-tab"]')?.click();
         }
     }
@@ -448,11 +450,11 @@ async function loadAppData() {
             API.getAccounts(),
             API.getMerchants(),
             API.getSchedule(),
-            API.getSamples(),
-            API.getFinance()
+            API.getSamples()
         ];
-        
+
         if (user && user.role === 'admin') {
+            promises.push(API.getFinance());
             promises.push(API.getUsers());
         }
 
@@ -464,9 +466,9 @@ async function loadAppData() {
         cachedMerchants = results[3] || [];
         cachedSchedule = results[4] || [];
         cachedSamples = results[5] || [];
-        cachedFinance = results[6] || [];
 
         if (user && user.role === 'admin') {
+            cachedFinance = results[6] || [];
             cachedUsers = results[7];
             populateAdminControls();
         }

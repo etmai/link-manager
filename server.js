@@ -946,7 +946,7 @@ app.post('/api/samples/cleanup-expired', authenticateToken, requireAdmin, async 
 });
 
 // =========== FINANCE CRUD ===========
-app.get('/api/finance', authenticateToken, async (req, res) => {
+app.get('/api/finance', authenticateToken, requireAdmin, async (req, res) => {
     const rows = await db.all('SELECT * FROM finance_entries ORDER BY date DESC, createdAt DESC');
     res.json(rows);
 });
