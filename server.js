@@ -148,6 +148,18 @@ async function initDb() {
             expiryDate TEXT DEFAULT 'N/A',
             createdAt TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS finance_entries (
+            id TEXT PRIMARY KEY,
+            date TEXT NOT NULL,
+            fulfillment_cost REAL DEFAULT 0,
+            fulfillment_note TEXT DEFAULT '',
+            other_cost REAL DEFAULT 0,
+            other_note TEXT DEFAULT '',
+            payment REAL DEFAULT 0,
+            payment_note TEXT DEFAULT '',
+            createdAt TEXT NOT NULL,
+            addedBy TEXT DEFAULT ''
+        );
     `);
 
     // Add columns if they don't exist (Migration)
@@ -931,6 +943,59 @@ app.post('/api/samples/cleanup-expired', authenticateToken, requireAdmin, async 
         console.error('Cleanup expired samples failed:', error);
         res.status(500).json({ error: 'Không thể xử lý các mẫu hết hạn.' });
     }
+});
+
+// =========== FINANCE CRUD ===========
+app.get('/api/finance', authenticateToken, async (req, res) => {
+    const rows = await db.all('SELECT * FROM finance_entries ORDER BY date DESC, createdAt DESC');
+    res.json(rows);
+});
+
+app.post('/api/finance', authenticateToken, requireAdmin, async (req, res) => {
+    const body = req.body || {};
+    const date = (body.date || '').toString().trim();
+    if (!date) return res.status(400).json({ error: 'Ngày không được để trống!' });
+
+    const fulfillment_cost = parseFloat(body.fulfillment_cost) || 0;
+    const fulfillment_note = (body.fulfillment_note || '').toString().trim();
+    const other_cost = parseFloat(body.other_cost) || 0;
+    const other_note = (body.other_note || '').toString().trim();
+    const payment = parseFloat(body.payment) || 0;
+    const payment_note = (body.payment_note || '').toString().trim();
+
+    const id = randomUUID();
+    const now = new Date().toISOString();
+    await db.run(
+        'INSERT INTO finance_entries (id, date, fulfillment_cost, fulfillment_note, other_cost, other_note, payment, payment_note, createdAt, addedBy) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [id, date, fulfillment_cost, fulfillment_note, other_cost, other_note, payment, payment_note, now, req.user.username]
+    );
+    res.json({ success: true, id });
+});
+
+app.put('/api/finance/:id', authenticateToken, requireAdmin, async (req, res) => {
+    const { id } = req.params;
+    const body = req.body || {};
+    const date = (body.date || '').toString().trim();
+    if (!date) return res.status(400).json({ error: 'Ngày không được để trống!' });
+
+    const fulfillment_cost = parseFloat(body.fulfillment_cost) || 0;
+    const fulfillment_note = (body.fulfillment_note || '').toString().trim();
+    const other_cost = parseFloat(body.other_cost) || 0;
+    const other_note = (body.other_note || '').toString().trim();
+    const payment = parseFloat(body.payment) || 0;
+    const payment_note = (body.payment_note || '').toString().trim();
+
+    await db.run(
+        'UPDATE finance_entries SET date=?, fulfillment_cost=?, fulfillment_note=?, other_cost=?, other_note=?, payment=?, payment_note=? WHERE id=?',
+        [date, fulfillment_cost, fulfillment_note, other_cost, other_note, payment, payment_note, id]
+    );
+    res.json({ success: true });
+});
+
+app.delete('/api/finance/:id', authenticateToken, requireAdmin, async (req, res) => {
+    const { id } = req.params;
+    await db.run('DELETE FROM finance_entries WHERE id = ?', [id]);
+    res.json({ success: true });
 });
 
 // Auto-reset expired sample links on server startup and every 24 hours

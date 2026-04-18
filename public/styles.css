@@ -543,6 +543,20 @@ textarea { resize: vertical; min-height: 80px; }
     border: 1px solid rgba(16,185,129,0.25);
 }
 
+/* ======== BTN-ICON-SM ======== */
+.btn-icon-sm {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 6px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 0.85em;
+    padding: 3px 7px;
+    transition: background 0.15s;
+}
+.btn-icon-sm:hover { background: rgba(255,255,255,0.14); color: var(--text-primary); }
+.btn-danger-sm:hover { background: rgba(239,68,68,0.2); color: #f87171; border-color: rgba(239,68,68,0.3); }
+
 /* ======== TOP PRODUCTS TABLE COLUMNS ======== */
 .col-sku    { overflow: hidden; }
 .col-sku .sku-tag { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

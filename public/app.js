@@ -135,6 +135,12 @@ const API = {
     async cleanupExpiredSamples() {
         return API.fetch('/api/samples/cleanup-expired', { method: 'POST' });
     },
+
+    // FINANCE
+    async getFinance() { return API.fetch('/api/finance'); },
+    async addFinance(data) { return API.fetch('/api/finance', { method: 'POST', body: JSON.stringify(data) }); },
+    async updateFinance(id, data) { return API.fetch(`/api/finance/${id}`, { method: 'PUT', body: JSON.stringify(data) }); },
+    async deleteFinance(id) { return API.fetch(`/api/finance/${id}`, { method: 'DELETE' }); },
 };
 
 // ====== APP STATE ======
@@ -147,6 +153,7 @@ let cachedMerchants = [];   // Cache merchant từ server
 let cachedSchedule = [];    // Cache lịch làm việc
 let cachedUsers = [];       // Cache danh sách người dùng (cho admin)
 let cachedSamples = [];     // Cache yêu cầu mẫu
+let cachedFinance = [];     // Cache thu chi
 let calendarDate = new Date(); // Tháng/Năm đang xem trên lịch
 let selectedDate = new Date().toISOString().split('T')[0]; // Ngày đang chọn (YYYY-MM-DD)
 let selectedScheduleUser = 'all'; // User đang lọc trên lịch
@@ -177,6 +184,7 @@ function resetAppState() {
     cachedSchedule = [];
     cachedUsers = [];
     cachedSamples = [];
+    cachedFinance = [];
     selectedScheduleUser = 'all';
 }
 
@@ -440,7 +448,8 @@ async function loadAppData() {
             API.getAccounts(),
             API.getMerchants(),
             API.getSchedule(),
-            API.getSamples()
+            API.getSamples(),
+            API.getFinance()
         ];
         
         if (user && user.role === 'admin') {
@@ -455,9 +464,10 @@ async function loadAppData() {
         cachedMerchants = results[3] || [];
         cachedSchedule = results[4] || [];
         cachedSamples = results[5] || [];
+        cachedFinance = results[6] || [];
 
         if (user && user.role === 'admin') {
-            cachedUsers = results[6];
+            cachedUsers = results[7];
             populateAdminControls();
         }
         
@@ -1259,6 +1269,9 @@ function updateTopbar(tabId) {
     } else if (tabId === 'samples-tab') {
         titleEl.textContent = '🔬 Quản Lý Mẫu';
         renderSamplesTable();
+    } else if (tabId === 'finance-tab') {
+        titleEl.textContent = '💰 Nhập Thu Chi';
+        renderFinanceTab();
     }
 }
 
@@ -2424,4 +2437,274 @@ async function init() {
 }
 
 init();
+
+// ====== FINANCE MODULE ======
+let financeEditingId = null;
+
+const FinanceDOM = {
+    get date()              { return document.getElementById('fin-date'); },
+    get fulfillmentCost()   { return document.getElementById('fin-fulfillment-cost'); },
+    get fulfillmentNote()   { return document.getElementById('fin-fulfillment-note'); },
+    get otherCost()         { return document.getElementById('fin-other-cost'); },
+    get otherNote()         { return document.getElementById('fin-other-note'); },
+    get payment()           { return document.getElementById('fin-payment'); },
+    get paymentNote()       { return document.getElementById('fin-payment-note'); },
+    get btnSave()           { return document.getElementById('btn-save-finance'); },
+    get btnCancel()         { return document.getElementById('btn-cancel-finance-edit'); },
+    get formTitle()         { return document.getElementById('finance-form-title'); },
+    get msg()               { return document.getElementById('finance-form-msg'); },
+    get tbody()             { return document.getElementById('finance-table-body'); },
+    get filterMonth()       { return document.getElementById('fin-filter-month'); },
+    get monthlySummary()    { return document.getElementById('finance-monthly-summary'); },
+    get adminActions()      { return document.getElementById('finance-form-admin-actions'); },
+    get formPanel()         { return document.getElementById('finance-form-panel'); },
+};
+
+function finFmt(val) {
+    const n = parseFloat(val) || 0;
+    return n === 0 ? '-' : '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function finColor(val) {
+    const n = parseFloat(val) || 0;
+    if (n > 0) return 'color:#34d399;';
+    if (n < 0) return 'color:#f87171;';
+    return 'color:var(--text-secondary);';
+}
+
+function finGetMonthKey(dateStr) {
+    if (!dateStr) return '';
+    return dateStr.substring(0, 7);
+}
+
+function finGetMonthLabel(key) {
+    if (!key) return '';
+    const [y, m] = key.split('-');
+    const months = ['Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', 'Tháng 6',
+                    'Tháng 7', 'Tháng 8', 'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12'];
+    return `${months[parseInt(m, 10) - 1]} ${y}`;
+}
+
+function renderFinanceTab() {
+    const user = getCurrentUser();
+    const isAdmin = user && user.role === 'admin';
+
+    if (FinanceDOM.formPanel) {
+        FinanceDOM.formPanel.style.display = isAdmin ? '' : 'none';
+    }
+
+    document.querySelectorAll('.finance-admin-col').forEach(el => {
+        el.classList.toggle('hidden', !isAdmin);
+    });
+
+    finPopulateMonthFilter();
+    renderFinanceMonthlySummary();
+    renderFinanceTable();
+
+    if (isAdmin) {
+        FinanceDOM.btnSave.onclick = finSaveEntry;
+        FinanceDOM.btnCancel.onclick = finCancelEdit;
+        FinanceDOM.filterMonth.onchange = renderFinanceTable;
+
+        if (!FinanceDOM.date.value) {
+            FinanceDOM.date.value = new Date().toISOString().split('T')[0];
+        }
+    } else {
+        FinanceDOM.filterMonth.onchange = renderFinanceTable;
+    }
+}
+
+function finPopulateMonthFilter() {
+    const select = FinanceDOM.filterMonth;
+    if (!select) return;
+    const months = [...new Set(cachedFinance.map(e => finGetMonthKey(e.date)))].sort().reverse();
+    const current = select.value;
+    select.innerHTML = '<option value="">Tất cả tháng</option>' +
+        months.map(m => `<option value="${m}" ${m === current ? 'selected' : ''}>${finGetMonthLabel(m)}</option>`).join('');
+}
+
+function finGetFilteredEntries() {
+    const month = FinanceDOM.filterMonth ? FinanceDOM.filterMonth.value : '';
+    if (!month) return cachedFinance;
+    return cachedFinance.filter(e => finGetMonthKey(e.date) === month);
+}
+
+function renderFinanceMonthlySummary() {
+    const container = FinanceDOM.monthlySummary;
+    if (!container) return;
+
+    const byMonth = {};
+    cachedFinance.forEach(e => {
+        const key = finGetMonthKey(e.date);
+        if (!byMonth[key]) byMonth[key] = { fulfillment: 0, other: 0, payment: 0 };
+        byMonth[key].fulfillment += parseFloat(e.fulfillment_cost) || 0;
+        byMonth[key].other       += parseFloat(e.other_cost) || 0;
+        byMonth[key].payment     += parseFloat(e.payment) || 0;
+    });
+
+    const months = Object.keys(byMonth).sort().reverse();
+    if (months.length === 0) {
+        container.innerHTML = '';
+        return;
+    }
+
+    const cards = months.map(key => {
+        const d = byMonth[key];
+        const profit = d.payment - d.fulfillment - d.other;
+        return `
+        <div class="glass-panel" style="flex:1; min-width:220px; padding: 16px 20px;">
+            <div style="font-size:0.8em; color:var(--text-secondary); font-weight:600; text-transform:uppercase; margin-bottom:10px; letter-spacing:0.5px;">${finGetMonthLabel(key)}</div>
+            <div style="display:flex; flex-direction:column; gap:6px;">
+                <div style="display:flex; justify-content:space-between; font-size:0.9em;">
+                    <span style="color:var(--text-secondary);">Fulfillment</span>
+                    <span style="color:#f87171; font-weight:600;">${finFmt(d.fulfillment)}</span>
+                </div>
+                <div style="display:flex; justify-content:space-between; font-size:0.9em;">
+                    <span style="color:var(--text-secondary);">Chi Phí Khác</span>
+                    <span style="color:#f87171; font-weight:600;">${finFmt(d.other)}</span>
+                </div>
+                <div style="display:flex; justify-content:space-between; font-size:0.9em;">
+                    <span style="color:var(--text-secondary);">Payment</span>
+                    <span style="color:#34d399; font-weight:600;">${finFmt(d.payment)}</span>
+                </div>
+                <div style="border-top:1px solid rgba(255,255,255,0.08); margin-top:6px; padding-top:8px; display:flex; justify-content:space-between; font-size:1em;">
+                    <span style="font-weight:600;">Lợi Nhuận</span>
+                    <span style="font-weight:700; ${finColor(profit)}">${finFmt(profit)}</span>
+                </div>
+            </div>
+        </div>`;
+    }).join('');
+
+    container.innerHTML = `
+        <h3 style="margin-bottom:14px;">Tổng Hợp Theo Tháng</h3>
+        <div style="display:flex; flex-wrap:wrap; gap:16px;">${cards}</div>
+    `;
+}
+
+function renderFinanceTable() {
+    const tbody = FinanceDOM.tbody;
+    if (!tbody) return;
+    const user = getCurrentUser();
+    const isAdmin = user && user.role === 'admin';
+    const entries = finGetFilteredEntries();
+
+    if (entries.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;color:var(--text-secondary);padding:24px;">Chưa có dữ liệu thu chi...</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = entries.map(e => {
+        const profit = (parseFloat(e.payment) || 0) - (parseFloat(e.fulfillment_cost) || 0) - (parseFloat(e.other_cost) || 0);
+        const adminActions = isAdmin ? `
+            <td class="finance-admin-col" style="text-align:center; white-space:nowrap;">
+                <button class="btn-icon-sm" onclick="finStartEdit('${e.id}')" title="Sửa" style="margin-right:4px;">✏️</button>
+                <button class="btn-icon-sm btn-danger-sm" onclick="finDeleteEntry('${e.id}')" title="Xóa">🗑️</button>
+            </td>` : `<td class="finance-admin-col hidden"></td>`;
+
+        return `<tr>
+            <td style="white-space:nowrap; font-size:0.88em;">${e.date}</td>
+            <td style="white-space:nowrap; text-align:right; color:#f87171; font-weight:600;">${finFmt(e.fulfillment_cost)}</td>
+            <td style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text-secondary); font-size:0.88em;" title="${e.fulfillment_note || ''}">${e.fulfillment_note || '<span style="opacity:0.4">—</span>'}</td>
+            <td style="white-space:nowrap; text-align:right; color:#f87171; font-weight:600;">${finFmt(e.other_cost)}</td>
+            <td style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text-secondary); font-size:0.88em;" title="${e.other_note || ''}">${e.other_note || '<span style="opacity:0.4">—</span>'}</td>
+            <td style="white-space:nowrap; text-align:right; color:#34d399; font-weight:600;">${finFmt(e.payment)}</td>
+            <td style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text-secondary); font-size:0.88em;" title="${e.payment_note || ''}">${e.payment_note || '<span style="opacity:0.4">—</span>'}</td>
+            <td style="white-space:nowrap; text-align:right; font-weight:700; ${finColor(profit)}">${finFmt(profit)}</td>
+            ${adminActions}
+        </tr>`;
+    }).join('');
+}
+
+function finClearForm() {
+    FinanceDOM.date.value = new Date().toISOString().split('T')[0];
+    FinanceDOM.fulfillmentCost.value = '';
+    FinanceDOM.fulfillmentNote.value = '';
+    FinanceDOM.otherCost.value = '';
+    FinanceDOM.otherNote.value = '';
+    FinanceDOM.payment.value = '';
+    FinanceDOM.paymentNote.value = '';
+    FinanceDOM.msg.textContent = '';
+    FinanceDOM.msg.style.color = '';
+}
+
+function finShowMsg(text, isError = false) {
+    const el = FinanceDOM.msg;
+    if (!el) return;
+    el.textContent = text;
+    el.style.color = isError ? '#ef4444' : '#34d399';
+    if (!isError) setTimeout(() => { el.textContent = ''; }, 3000);
+}
+
+async function finSaveEntry() {
+    const date = FinanceDOM.date.value;
+    if (!date) { finShowMsg('Vui lòng chọn ngày!', true); return; }
+
+    const data = {
+        date,
+        fulfillment_cost: parseFloat(FinanceDOM.fulfillmentCost.value) || 0,
+        fulfillment_note: FinanceDOM.fulfillmentNote.value.trim(),
+        other_cost:       parseFloat(FinanceDOM.otherCost.value) || 0,
+        other_note:       FinanceDOM.otherNote.value.trim(),
+        payment:          parseFloat(FinanceDOM.payment.value) || 0,
+        payment_note:     FinanceDOM.paymentNote.value.trim(),
+    };
+
+    try {
+        FinanceDOM.btnSave.disabled = true;
+        if (financeEditingId) {
+            await API.updateFinance(financeEditingId, data);
+            finShowMsg('Đã cập nhật bản ghi!');
+        } else {
+            await API.addFinance(data);
+            finShowMsg('Đã thêm bản ghi!');
+        }
+        cachedFinance = await API.getFinance();
+        finCancelEdit();
+        finPopulateMonthFilter();
+        renderFinanceMonthlySummary();
+        renderFinanceTable();
+    } catch (err) {
+        finShowMsg('Lỗi: ' + err.message, true);
+    } finally {
+        FinanceDOM.btnSave.disabled = false;
+    }
+}
+
+function finStartEdit(id) {
+    const entry = cachedFinance.find(e => e.id === id);
+    if (!entry) return;
+    financeEditingId = id;
+    FinanceDOM.date.value              = entry.date;
+    FinanceDOM.fulfillmentCost.value   = entry.fulfillment_cost || '';
+    FinanceDOM.fulfillmentNote.value   = entry.fulfillment_note || '';
+    FinanceDOM.otherCost.value         = entry.other_cost || '';
+    FinanceDOM.otherNote.value         = entry.other_note || '';
+    FinanceDOM.payment.value           = entry.payment || '';
+    FinanceDOM.paymentNote.value       = entry.payment_note || '';
+    FinanceDOM.formTitle.textContent   = 'Sửa Bản Ghi Thu Chi';
+    FinanceDOM.btnSave.textContent     = 'Cập Nhật';
+    FinanceDOM.btnCancel.classList.remove('hidden');
+    FinanceDOM.formPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function finCancelEdit() {
+    financeEditingId = null;
+    FinanceDOM.formTitle.textContent = 'Thêm Bản Ghi Thu Chi';
+    FinanceDOM.btnSave.textContent   = 'Lưu Bản Ghi';
+    FinanceDOM.btnCancel.classList.add('hidden');
+    finClearForm();
+}
+
+async function finDeleteEntry(id) {
+    if (!confirm('Xác nhận xóa bản ghi này?')) return;
+    try {
+        await API.deleteFinance(id);
+        cachedFinance = await API.getFinance();
+        finPopulateMonthFilter();
+        renderFinanceMonthlySummary();
+        renderFinanceTable();
+    } catch (err) {
+        alert('Lỗi xóa: ' + err.message);
+    }
+}
 
