@@ -484,64 +484,130 @@ app.delete('/api/links/:id', authenticateToken, async (req, res) => {
 
 // =========== SALES MANAGEMENT API ===========
 
-// Hàm tự động lấy tiêu đề sản phẩm từ Amazon bằng SKU (scrape nhẹ)
-function fetchAmazonTitle(sku) {
-    return new Promise((resolve) => {
-        const options = {
-            hostname: 'www.amazon.com',
-            path: `/dp/${sku}`,
-            method: 'GET',
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Accept-Language': 'en-US,en;q=0.9',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-            },
-            timeout: 8000
-        };
+// =========== WEB SCRAPING HELPERS ===========
 
-        const req = https.request(options, (res) => {
-            // Follow redirects
-            if ((res.statusCode === 301 || res.statusCode === 302) && res.headers.location) {
-                resolve(`Amazon Product (SKU: ${sku})`);
-                return;
-            }
+// Helper function to extract title using multiple regex patterns
+function extractTitleFromHtml(html, platform) {
+    let patterns = [];
+    if (platform === 'amazon') {
+        patterns = [
+            /<span id="productTitle"[^>]*>([\s\S]*?)<\/span>/i,
+            /<h1 id="title"[^>]*>([\s\S]*?)<\/h1>/i,
+            /<meta name="title" content="([\s\S]*?)"/i,
+            /<meta property="og:title" content="([\s\S]*?)"/i,
+            /<title[^>]*>([\s\S]*?)<\/title>/i
+        ];
+    } else if (platform === 'etsy') {
+        patterns = [
+            /<h1[^>]*data-buy-box-listing-title[^>]*>([\s\S]*?)<\/h1>/i,
+            /<h1[^>]*class="[^"]*wt-text-body-01[^"]*"[^>]*>([\s\S]*?)<\/h1>/i,
+            /<meta property="og:title" content="([\s\S]*?)"/i,
+            /<title[^>]*>([\s\S]*?)<\/title>/i
+        ];
+    } else if (platform === 'ebay') {
+        patterns = [
+            /<h1[^>]*class="x-item-title__mainTitle"[^>]*>([\s\S]*?)<\/h1>/i,
+            /<h1[^>]*id="itemTitle"[^>]*>([\s\S]*?)<\/h1>/i,
+            /<meta property="og:title" content="([\s\S]*?)"/i,
+            /<title[^>]*>([\s\S]*?)<\/title>/i
+        ];
+    }
 
-            let data = '';
-            res.on('data', chunk => { data += chunk; });
-            res.on('end', () => {
-                // Extract title from <title> tag
-                const titleMatch = data.match(/<title[^>]*>([^<]+)<\/title>/i);
-                if (titleMatch && titleMatch[1]) {
-                    let title = titleMatch[1].trim();
-                    // Clean up Amazon's title format: "Product Name: Amazon.com: ..."
-                    title = title.replace(/\s*:\s*Amazon\.com.*$/i, '').replace(/Amazon\.com\s*:\s*/i, '').trim();
-                    if (title && title.toLowerCase() !== 'amazon' && title.length > 3) {
-                        resolve(title);
-                    } else {
-                        resolve(`Amazon Product (SKU: ${sku})`);
-                    }
-                } else {
-                    resolve(`Amazon Product (SKU: ${sku})`);
-                }
-            });
-        });
-
-        req.on('error', () => resolve(`Amazon Product (SKU: ${sku})`));
-        req.on('timeout', () => { req.destroy(); resolve(`Amazon Product (SKU: ${sku})`); });
-        req.end();
-    });
+    for (let regex of patterns) {
+        const match = html.match(regex);
+        if (match && match[1]) {
+            let title = match[1].replace(/<[^>]*>/g, '').trim();
+            if (platform === 'ebay') title = title.replace(/^Details about\s+/i, '');
+            // Simple HTML entity decoding
+            title = title.replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#039;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+            // Filter out generic Amazon page titles
+            if (platform === 'amazon' && (title.toLowerCase() === 'amazon.com' || title.toLowerCase() === 'amazon')) continue;
+            if (title) return title;
+        }
+    }
+    return null;
 }
 
-// GET: Lấy tiêu đề sản phẩm Amazon từ SKU
-app.get('/api/amazon/title/:sku', authenticateToken, async (req, res) => {
-    const { sku } = req.params;
-    if (!sku || sku.length < 3) return res.status(400).json({ error: 'SKU không hợp lệ!' });
+const SCRAPE_HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+    'Accept-Language': 'en-US,en;q=0.9',
+    'Cache-Control': 'no-cache',
+    'Pragma': 'no-cache'
+};
 
+app.get('/api/scrape/amazon/:asin', authenticateToken, async (req, res) => {
+    const { asin } = req.params;
+    console.log(`[SCRAPER] Amazon ASIN: ${asin}`);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 12000);
+    
     try {
-        const title = await fetchAmazonTitle(sku.trim().toUpperCase());
-        res.json({ sku, title });
-    } catch (err) {
-        res.json({ sku, title: `Amazon Product (SKU: ${sku})` });
+        const response = await fetch(`https://www.amazon.com/dp/${asin}`, { 
+            headers: SCRAPE_HEADERS,
+            signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+        
+        const html = await response.text();
+        console.log(`[SCRAPER] Amazon Response: ${response.status}, HTML Length: ${html.length}`);
+        
+        if (html.includes('api-services-support@amazon.com') || html.includes('To discuss automated access')) {
+            console.warn('[SCRAPER] Amazon detected automated access (Robot Check).');
+        }
+
+        const title = extractTitleFromHtml(html, 'amazon');
+        if (title) {
+            console.log(`[SCRAPER] Success: ${title.substring(0, 50)}...`);
+            res.json({ title });
+        } else {
+            console.error('[SCRAPER] Title not found in HTML.');
+            res.status(404).json({ error: 'Không tìm thấy tiêu đề Amazon! (Regex failure or CAPTCHA)' });
+        }
+    } catch (error) {
+        clearTimeout(timeoutId);
+        console.error(`[SCRAPER] Amazon Error: ${error.message}`);
+        res.status(500).json({ error: 'Lỗi Amazon: ' + error.message });
+    }
+});
+
+app.get('/api/scrape/etsy/:id', authenticateToken, async (req, res) => {
+    const { id } = req.params;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 12000);
+    try {
+        const response = await fetch(`https://www.etsy.com/listing/${id}`, { 
+            headers: SCRAPE_HEADERS,
+            signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+        const html = await response.text();
+        const title = extractTitleFromHtml(html, 'etsy');
+        if (title) res.json({ title });
+        else res.status(404).json({ error: 'Không tìm thấy tiêu đề Etsy!' });
+    } catch (error) {
+        clearTimeout(timeoutId);
+        res.status(500).json({ error: 'Lỗi Etsy: ' + error.message });
+    }
+});
+
+app.get('/api/scrape/ebay/:id', authenticateToken, async (req, res) => {
+    const { id } = req.params;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 12000);
+    try {
+        const response = await fetch(`https://www.ebay.com/itm/${id}`, { 
+            headers: SCRAPE_HEADERS,
+            signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+        const html = await response.text();
+        const title = extractTitleFromHtml(html, 'ebay');
+        if (title) res.json({ title });
+        else res.status(404).json({ error: 'Không tìm thấy tiêu đề eBay!' });
+    } catch (error) {
+        clearTimeout(timeoutId);
+        res.status(500).json({ error: 'Lỗi eBay: ' + error.message });
     }
 });
 

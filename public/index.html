@@ -392,7 +392,7 @@
                             <h3>🏆 Top Tuần</h3>
                             <div class="table-container" style="margin-top:16px;">
                                 <table class="modern-table">
-                                    <thead><tr><th>SKU</th><th>Tiêu Đề</th><th>Category</th><th>Link</th></tr></thead>
+                                    <thead><tr><th>SKU</th><th>Tiêu Đề</th><th>Design</th><th>Link</th></tr></thead>
                                     <tbody id="top-weekly-body"></tbody>
                                 </table>
                             </div>
@@ -401,16 +401,28 @@
                             <h3>📅 Top Tháng</h3>
                             <div class="table-container" style="margin-top:16px;">
                                 <table class="modern-table">
-                                    <thead><tr><th>SKU</th><th>Tiêu Đề</th><th>Category</th><th>Link</th></tr></thead>
+                                    <thead><tr><th>SKU</th><th>Tiêu Đề</th><th>Design</th><th>Link</th></tr></thead>
                                     <tbody id="top-monthly-body"></tbody>
                                 </table>
                             </div>
                         </div>
                     </div>
                     <div class="links-display-section glass-panel">
-                        <h3>📈 Xu Hướng 14 Ngày</h3>
-                        <div id="sales-chart" style="margin-top: 20px; display:flex; align-items:flex-end; gap:8px; height:160px;"></div>
-                        <div id="sales-chart-labels" style="display:flex; gap:8px; padding-top: 8px;"></div>
+                        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+                            <h3>📈 Xu Hướng Doanh Số</h3>
+                            <div class="chart-range-selector">
+                                <label class="chart-range-label">Thời gian:</label>
+                                <select id="chart-range-select" class="chart-range-select" onchange="setChartRange(parseInt(this.value))">
+                                    <option value="7">7 Ngày gần nhất</option>
+                                    <option value="14">14 Ngày gần nhất</option>
+                                    <option value="30">30 Ngày gần nhất</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div id="sales-chart-wrapper" style="margin-top: 20px; overflow-x: auto; width: 100%;">
+                            <div id="sales-chart" style="display:flex; align-items:flex-end; gap:6px; height:200px; padding-bottom: 5px; min-width: 100%;"></div>
+                            <div id="sales-chart-labels" style="display:flex; gap:6px; padding-top: 8px;"></div>
+                        </div>
                     </div>
                 </div>
             </div>

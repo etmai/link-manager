@@ -120,7 +120,7 @@ const API = {
         return API.fetch(`/api/schedule/${id}`, { method: 'DELETE' });
     },
     // USERS
-    async getUsers() { return API.fetch('/api/users'); },
+
     // SAMPLES
     async getSamples() { return API.fetch('/api/samples'); },
     async addSample(designId) {
@@ -1268,7 +1268,7 @@ const SalesAPI = {
     async add(data) { return API.fetch('/api/sales', { method: 'POST', body: JSON.stringify(data) }); },
     async update(id, data) { return API.fetch(`/api/sales/${id}`, { method: 'PUT', body: JSON.stringify(data) }); },
     async delete(id) { return API.fetch(`/api/sales/${id}`, { method: 'DELETE' }); },
-    async getAmazonTitle(sku) { return API.fetch(`/api/amazon/title/${encodeURIComponent(sku)}`); },
+
 };
 
 // ====== SALES STATE ======
@@ -1284,32 +1284,67 @@ async function loadSalesData() {
 
 // ====== SALES: SKU SCAN ======
 async function handleScanSku() {
-    const sku = document.getElementById('sales-sku').value.trim().toUpperCase();
-    if (!sku) { showError('Vui lòng nhập mã SKU trước!'); return; }
+    const skuInput = document.getElementById('sales-sku');
+    if (!skuInput) return;
+    const sku = skuInput.value.trim();
+    if (!sku) { showError('Vui lòng nhập SKU trước khi quét!'); return; }
 
     const btnText = document.getElementById('scan-btn-text');
     const btnLoader = document.getElementById('scan-btn-loader');
-    const titleInput = document.getElementById('sales-title');
+    const titleEl = document.getElementById('sales-title');
     const scanBtn = document.getElementById('btn-scan-sku');
-
-    btnText.classList.add('hidden');
-    btnLoader.classList.remove('hidden');
-    scanBtn.disabled = true;
-    titleInput.value = 'Đang quét từ Amazon...';
-    titleInput.style.color = 'var(--text-secondary)';
+    
+    // Platform detection logic
+    let type = 'amazon'; // Default
+    let platformName = 'Amazon';
+    
+    if (/^[0-9]+$/.test(sku)) {
+        // Purely numeric
+        if (sku.length === 12) {
+            type = 'ebay';
+            platformName = 'eBay';
+        } else if (sku.length >= 10 && sku.length <= 11) {
+            type = 'etsy';
+            platformName = 'Etsy';
+        }
+    } else if (sku.length === 10) {
+        type = 'amazon';
+        platformName = 'Amazon';
+    }
 
     try {
-        const result = await SalesAPI.getAmazonTitle(sku);
-        titleInput.value = result.title || `Amazon Product (SKU: ${sku})`;
-        titleInput.style.color = 'var(--success-color)';
-        document.getElementById('sales-sku').value = sku;
+        if (btnText) btnText.textContent = `Quét ${platformName}...`;
+        if (btnLoader) btnLoader.classList.remove('hidden');
+        if (scanBtn) scanBtn.disabled = true;
+        
+        if (titleEl) {
+            titleEl.value = `Đang quét từ ${platformName}...`;
+            titleEl.style.color = 'var(--text-secondary)';
+        }
+
+        const data = await API.fetch(`/api/scrape/${type}/${sku}`);
+        if (data && data.title) {
+            if (titleEl) {
+                titleEl.value = data.title;
+                titleEl.style.color = '#34d399';
+                // Show success feedback
+                const msgEl = document.getElementById('sales-form-msg');
+                if (msgEl) {
+                    msgEl.textContent = `✅ Đã tìm thấy tiêu đề từ ${platformName}!`;
+                    setTimeout(() => { if (msgEl.textContent.includes('tiêu đề')) msgEl.textContent = ''; }, 3000);
+                }
+            }
+        }
     } catch (err) {
-        titleInput.value = `Amazon Product (SKU: ${sku})`;
-        titleInput.style.color = 'var(--text-secondary)';
+        showError(`Không thể lấy tiêu đề từ ${platformName}. Vui lòng nhập thủ công.`);
+        if (titleEl) {
+            titleEl.value = `${platformName} Product (SKU: ${sku})`;
+            titleEl.style.color = 'var(--text-secondary)';
+        }
     } finally {
-        btnText.classList.remove('hidden');
-        btnLoader.classList.add('hidden');
-        scanBtn.disabled = false;
+        if (btnText) btnText.textContent = 'Quét';
+        if (btnLoader) btnLoader.classList.add('hidden');
+        if (scanBtn) scanBtn.disabled = false;
     }
 }
 
@@ -1560,6 +1595,16 @@ window.handleDeleteSales = function(id) {
 };
 
 // ====== STATISTICS ======
+let currentChartRange = 7;
+
+window.setChartRange = function(days) {
+    currentChartRange = days;
+    // Sync the select element
+    const sel = document.getElementById('chart-range-select');
+    if (sel) sel.value = String(days);
+    renderSalesChart();
+};
+
 function renderStatistics() {
     const today = new Date();
     const d7 = new Date(today); d7.setDate(today.getDate() - 7);
@@ -1571,35 +1616,30 @@ function renderStatistics() {
     const totalUnits = monthSales.reduce((a, s) => a + (s.sales || 0), 0);
     const uniqueSkus = [...new Set(cachedSales.map(s => s.sku))].length;
 
-    const accountCount = {};
-    cachedSales.forEach(s => { accountCount[s.account] = (accountCount[s.account] || 0) + s.sales; });
-    const topAccount = Object.entries(accountCount).sort((a, b) => b[1] - a[1])[0]?.[0] || '—';
-
-    const fulfillmentCount = {};
-    cachedSales.forEach(s => {
-        const key = s.fulfillment || 'Khác';
-        fulfillmentCount[key] = (fulfillmentCount[key] || 0) + s.sales;
+    // Calculate Top Design (aggregated by design_id)
+    const designCount = {};
+    cachedSales.forEach(s => { 
+        if (s.design_id) designCount[s.design_id] = (designCount[s.design_id] || 0) + s.sales; 
     });
-    const topFulfillment = Object.entries(fulfillmentCount).sort((a, b) => b[1] - a[1])[0]?.[0] || '—';
+    const topDesign = Object.entries(designCount).sort((a, b) => b[1] - a[1])[0]?.[0] || '—';
 
     const statsContainer = document.getElementById('stats-summary-cards');
     if (statsContainer) {
         statsContainer.innerHTML = `
             <div class="stat-card">
-                <div class="stat-title">Doanh số Tháng Này</div>
+                <div class="stat-icon">📦</div>
+                <div class="stat-title">Doanh Số Tháng Này</div>
                 <div class="stat-val" id="stat-total-units">${totalUnits.toLocaleString()}</div>
             </div>
             <div class="stat-card">
+                <div class="stat-icon">🏷️</div>
                 <div class="stat-title">Số Lượng SKU</div>
                 <div class="stat-val" id="stat-unique-skus">${uniqueSkus}</div>
             </div>
             <div class="stat-card">
-                <div class="stat-title">Top Account</div>
-                <div class="stat-val" id="stat-top-merchant" style="font-size: 1.5em;">${topAccount}</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-title">Top Fulfillment</div>
-                <div class="stat-val" id="stat-top-category" style="font-size: 1.5em;">${topFulfillment}</div>
+                <div class="stat-icon">🎨</div>
+                <div class="stat-title">Top Design</div>
+                <div class="stat-val" id="stat-top-design" style="font-size:${topDesign.length > 12 ? '1.1em' : '1.6em'}; word-break:break-all;">${topDesign}</div>
             </div>
         `;
     }
@@ -1612,8 +1652,10 @@ function renderStatistics() {
 function renderTopProducts(tbodyId, data) {
     const grouped = {};
     data.forEach(s => {
-        if (!grouped[s.sku]) grouped[s.sku] = { sku: s.sku, title: s.title || s.sku, account: s.account, total: 0 };
+        if (!grouped[s.sku]) grouped[s.sku] = { sku: s.sku, title: s.title || s.sku, design_id: s.design_id, total: 0 };
         grouped[s.sku].total += s.sales;
+        // Keep the latest design_id for that SKU if multiple exist
+        if (s.design_id) grouped[s.sku].design_id = s.design_id;
     });
     const sorted = Object.values(grouped).sort((a, b) => b.total - a.total).slice(0, 10);
     const tbody = document.getElementById(tbodyId);
@@ -1632,7 +1674,7 @@ function renderTopProducts(tbodyId, data) {
         tr.innerHTML = `
             <td><span class="sku-tag">${p.sku}</span></td>
             <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${p.title}">${p.title}</td>
-            <td><span class="tag">${p.account || 'N/A'}</span></td>
+            <td><span class="tag" style="background: rgba(96,165,250,0.1); color:#60a5fa; border-color:rgba(96,165,250,0.2);">${p.design_id || 'N/A'}</span></td>
             <td>${linkHtml}</td>
         `;
         tbody.appendChild(tr);
@@ -1642,16 +1684,21 @@ function renderTopProducts(tbodyId, data) {
 function renderSalesChart() {
     const chartEl = document.getElementById('sales-chart');
     const labelsEl = document.getElementById('sales-chart-labels');
+    const wrapperEl = document.getElementById('sales-chart-wrapper');
     if (!chartEl || !labelsEl) return;
 
+    const range = currentChartRange || 7;
+    const today = new Date();
     const days = [];
-    for (let i = 13; i >= 0; i--) {
-        const d = new Date(); d.setDate(d.getDate() - i);
+    for (let i = range - 1; i >= 0; i--) {
+        const d = new Date(today);
+        d.setDate(today.getDate() - i);
         days.push(d.toISOString().split('T')[0]);
     }
+
     const dayTotals = days.map(day => ({
         day,
-        label: day.slice(5),
+        label: day.slice(5).replace('-', '/'),
         total: cachedSales.filter(s => s.date === day).reduce((a, s) => a + s.sales, 0)
     }));
     const max = Math.max(...dayTotals.map(d => d.total), 1);
@@ -1659,18 +1706,35 @@ function renderSalesChart() {
     chartEl.innerHTML = '';
     labelsEl.innerHTML = '';
 
+    // Auto-calculate bar width based on range and container size
+    const containerWidth = wrapperEl ? wrapperEl.clientWidth - 24 : 600;
+    const minBarWidth = range <= 7 ? 48 : range <= 14 ? 36 : 26;
+    const barWidth = Math.max(Math.floor(containerWidth / range), minBarWidth);
+    const totalChartWidth = barWidth * range;
+    const gap = 6;
+
+    // Set the chart/labels to the computed width so they can scroll if needed
+    const chartWidth = Math.max(totalChartWidth, containerWidth);
+    chartEl.style.width = chartWidth + 'px';
+    labelsEl.style.width = chartWidth + 'px';
+    chartEl.style.minWidth = '';
+
     dayTotals.forEach(d => {
         const heightPct = Math.round((d.total / max) * 100);
         const wrap = document.createElement('div');
         wrap.className = 'chart-bar-wrap';
+        wrap.style.flex = `0 0 ${barWidth - gap}px`;
+        wrap.style.maxWidth = `${barWidth - gap}px`;
         wrap.innerHTML = `
             <div class="chart-bar-value">${d.total > 0 ? d.total : ''}</div>
-            <div class="chart-bar" style="height:${Math.max(heightPct, 2)}%" title="${d.day}: ${d.total} units"></div>
+            <div class="chart-bar" style="height:${Math.max(heightPct, 2)}%" title="${d.day}: ${d.total} đơn"></div>
         `;
         chartEl.appendChild(wrap);
 
         const lbl = document.createElement('div');
         lbl.className = 'chart-label';
+        lbl.style.flex = `0 0 ${barWidth - gap}px`;
+        lbl.style.maxWidth = `${barWidth - gap}px`;
         lbl.textContent = d.label;
         labelsEl.appendChild(lbl);
     });
