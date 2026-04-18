@@ -2649,6 +2649,20 @@ async function finSaveEntry() {
         payment_note:     FinanceDOM.paymentNote.value.trim(),
     };
 
+    if (!financeEditingId) {
+        const existingOnDate = cachedFinance.filter(e => e.date === date);
+        if (existingOnDate.length > 0) {
+            const existing = existingOnDate[0];
+            const lines = [`Ngày ${date} đã có bản ghi:`];
+            if (existing.fulfillment_cost) lines.push(`  • Chi Fulfillment: ${finFmt(existing.fulfillment_cost)}${existing.fulfillment_note ? ' (' + existing.fulfillment_note + ')' : ''}`);
+            if (existing.other_cost)       lines.push(`  • Chi Khác: ${finFmt(existing.other_cost)}${existing.other_note ? ' (' + existing.other_note + ')' : ''}`);
+            if (existing.payment)          lines.push(`  • Thu Về: ${finFmt(existing.payment)}${existing.payment_note ? ' (' + existing.payment_note + ')' : ''}`);
+            lines.push('');
+            lines.push('Bạn có chắc muốn thêm bản ghi trùng ngày không?');
+            if (!confirm(lines.join('\n'))) return;
+        }
+    }
+
     try {
         FinanceDOM.btnSave.disabled = true;
         if (financeEditingId) {
