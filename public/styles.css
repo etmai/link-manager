@@ -543,6 +543,35 @@ textarea { resize: vertical; min-height: 80px; }
     border: 1px solid rgba(16,185,129,0.25);
 }
 
+/* ======== FINANCE FORM GRID ======== */
+.fin-fields-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+}
+.fin-field-group {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 10px;
+    padding: 16px;
+}
+.fin-field-label {
+    font-size: 0.78em;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--accent-color, #60a5fa);
+    margin-bottom: 14px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+}
+@media (max-width: 900px) {
+    .fin-fields-grid { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 580px) {
+    .fin-fields-grid { grid-template-columns: 1fr; }
+}
+
 /* ======== BTN-ICON-SM ======== */
 .btn-icon-sm {
     background: rgba(255,255,255,0.06);
