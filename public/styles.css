@@ -935,7 +935,7 @@ select#task-assignee-input option {
 
 /* ======== SALES COMPACT TABLE ======== */
 .sales-compact-table {
-    table-layout: fixed;
+    table-layout: auto; /* Changed from fixed to allow columns to respect min-widths */
     width: 100%;
 }
 
@@ -948,31 +948,19 @@ select#task-assignee-input option {
     white-space: nowrap;
 }
 
-/* Column widths — total ~100% */
-.sales-compact-table th:nth-child(1),
-.sales-compact-table td:nth-child(1) { width: 8%; }   /* Date */
-.sales-compact-table th:nth-child(2),
-.sales-compact-table td:nth-child(2) { width: 9%; }   /* Account */
-.sales-compact-table th:nth-child(3),
-.sales-compact-table td:nth-child(3) { width: 6%; }   /* Ful. */
-.sales-compact-table th:nth-child(4),
-.sales-compact-table td:nth-child(4) { width: 9%; }   /* Design */
-.sales-compact-table th:nth-child(5),
-.sales-compact-table td:nth-child(5) { width: 9%; }   /* SKU */
-.sales-compact-table th:nth-child(6),
-.sales-compact-table td:nth-child(6) { width: 16%; }  /* Title */
-.sales-compact-table th:nth-child(7),
-.sales-compact-table td:nth-child(7) { width: 8%; }   /* OrdID */
-.sales-compact-table th:nth-child(8),
-.sales-compact-table td:nth-child(8) { width: 7%; }   /* Custom */
-.sales-compact-table th:nth-child(9),
-.sales-compact-table td:nth-child(9) { width: 5%; }   /* Size */
-.sales-compact-table th:nth-child(10),
-.sales-compact-table td:nth-child(10) { width: 9%; }  /* File */
-.sales-compact-table th:nth-child(11),
-.sales-compact-table td:nth-child(11) { width: 5%; }  /* Sale */
-.sales-compact-table th:nth-child(12),
-.sales-compact-table td:nth-child(12) { width: 9%; }  /* Actions */
+/* Column widths — using min-width to prevent squashing on mobile */
+.sales-compact-table th:nth-child(1), .sales-compact-table td:nth-child(1) { min-width: 90px; width: 90px; } /* Date */
+.sales-compact-table th:nth-child(2), .sales-compact-table td:nth-child(2) { min-width: 110px; width: 110px; } /* Account */
+.sales-compact-table th:nth-child(3), .sales-compact-table td:nth-child(3) { min-width: 65px; width: 65px; } /* Ful. */
+.sales-compact-table th:nth-child(4), .sales-compact-table td:nth-child(4) { min-width: 110px; width: 110px; } /* Design */
+.sales-compact-table th:nth-child(5), .sales-compact-table td:nth-child(5) { min-width: 120px; width: 120px; } /* SKU */
+.sales-compact-table th:nth-child(6), .sales-compact-table td:nth-child(6) { min-width: 220px; width: auto; } /* Title (Flexible) */
+.sales-compact-table th:nth-child(7), .sales-compact-table td:nth-child(7) { min-width: 120px; width: 120px; } /* OrdID */
+.sales-compact-table th:nth-child(8), .sales-compact-table td:nth-child(8) { min-width: 110px; width: 110px; } /* Custom */
+.sales-compact-table th:nth-child(9), .sales-compact-table td:nth-child(9) { min-width: 65px; width: 65px; } /* Size */
+.sales-compact-table th:nth-child(10), .sales-compact-table td:nth-child(10) { min-width: 130px; width: 130px; } /* File */
+.sales-compact-table th:nth-child(11), .sales-compact-table td:nth-child(11) { min-width: 70px; width: 70px; text-align: center; } /* Sale */
+.sales-compact-table th:nth-child(12), .sales-compact-table td:nth-child(12) { min-width: 100px; width: 100px; text-align: center; } /* Actions */
 
 .sales-compact-table td {
     cursor: default;
@@ -1000,4 +988,24 @@ select#task-assignee-input option {
     padding: 4px 8px;
     font-size: 0.8em;
     margin-right: 2px;
+}
+
+/* Response: Enable horizontal scroll but keep columns balanced on mobile */
+@media (max-width: 992px) {
+    .sales-compact-table {
+        display: table !important;
+        min-width: 1200px !important; /* Force enough width for all columns */
+    }
+    
+    .table-container {
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    .sales-compact-table th,
+    .sales-compact-table td {
+        padding: 12px 10px;
+        font-size: 0.85em;
+        white-space: nowrap !important; /* Ensure data doesn't wrap and squash vertically */
+    }
 }
