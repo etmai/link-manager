@@ -119,27 +119,6 @@ const API = {
     async deleteScheduleTask(id) {
         return API.fetch(`/api/schedule/${id}`, { method: 'DELETE' });
     },
-    
-    // TRELLO INTEGRATION
-    async uploadTrelloAttachment(cardId, fileName, fileType, fileData) {
-        return API.fetch('/api/trello/upload-attachment', { 
-            method: 'POST', 
-            body: JSON.stringify({ cardId, fileName, fileType, fileData }) 
-        });
-    },
-    async getTrelloAttachments(cardId) {
-        return API.fetch(`/api/trello/card/${cardId}/attachments`);
-    },
-    async deleteTrelloAttachment(attachmentId) {
-        return API.fetch(`/api/trello/attachment/${attachmentId}`, { method: 'DELETE' });
-    },
-    async syncTrelloCard(taskId, title, description, date, action) {
-        return API.fetch('/api/trello/sync-card', { 
-            method: 'POST', 
-            body: JSON.stringify({ taskId, title, description, date, action }) 
-        });
-    },
-    
     // USERS
 
     // SAMPLES
@@ -286,12 +265,6 @@ const DOM = {
     taskTitleInput: document.getElementById('task-title-input'),
     taskDescInput: document.getElementById('task-desc-input'),
     btnSaveTask: document.getElementById('btn-save-task'),
-    taskTrelloCardIdInput: document.getElementById('task-trello-card-id'),
-    trelloAttachmentSection: document.getElementById('trello-attachment-section'),
-    trelloAttachmentsList: document.getElementById('trello-attachments-list'),
-    trelloFileInput: document.getElementById('trello-file-input'),
-    btnUploadTrelloFile: document.getElementById('btn-upload-trello-file'),
-    btnSyncTrello: document.getElementById('btn-sync-trello'),
 
     modalTaskDetail: document.getElementById('modal-task-detail'),
     detailTaskTitle: document.getElementById('detail-task-title'),
