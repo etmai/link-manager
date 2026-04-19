@@ -50,9 +50,6 @@
                         <button class="nav-tab active" data-tab="links-tab" id="nav-links">
                             <span class="nav-icon">🔗</span><span class="nav-label">Quản Lý Links</span>
                         </button>
-                        <button class="nav-tab" data-tab="settings-tab" id="nav-settings">
-                            <span class="nav-icon">⚙️</span><span class="nav-label">Cài Đặt Chung</span>
-                        </button>
                         <button class="nav-tab" data-tab="schedule-tab" id="nav-schedule">
                             <span class="nav-icon">📅</span><span class="nav-label">Lịch Công Việc</span>
                         </button>
@@ -81,7 +78,8 @@
                 <!-- SECTION: ADMIN -->
                 <div id="admin-menu" class="menu-box hidden">
                     <h4 class="section-title">CÀI ĐẶT</h4>
-                    <button class="btn-secondary w-full" id="btn-open-users">🧑‍💻 Người Dùng</button>
+                    <button class="nav-tab btn-secondary w-full mb-2" data-tab="settings-tab" id="nav-settings" style="justify-content: center;">⚙️ Cài Đặt Chung</button>
+                    <button class="nav-tab btn-secondary w-full" data-tab="users-tab" id="nav-users" style="justify-content: center;">🧑‍💻 Người Dùng</button>
                 </div>
             </div>
 
@@ -662,6 +660,52 @@
                 </div>
             </div>
             <!-- ===== END TAB: NHẬP THU CHI ===== -->
+            
+            <!-- ===== TAB: QUẢN LÝ NGƯỜI DÙNG (Mới) ===== -->
+            <div id="users-tab" class="tab-content">
+                <div class="add-link-section glass-panel mb-4">
+                    <h3 id="users-form-title">➕ Thêm Người Dùng Mới</h3>
+                    <form id="add-user-form" style="display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-end;">
+                        <input type="hidden" id="edit-user-original-name">
+                        <div class="input-group" style="flex: 1; min-width: 200px;">
+                            <label>Tên Đăng Nhập</label>
+                            <input type="text" id="new-user-name" required placeholder="User name">
+                        </div>
+                        <div class="input-group" style="flex: 1; min-width: 200px;">
+                            <label>Mật Khẩu</label>
+                            <input type="password" id="new-user-pass" required placeholder="Mật khẩu mới">
+                        </div>
+                        <div class="input-group" style="width: 140px;">
+                            <label>Vai Trò</label>
+                            <select id="new-user-role">
+                                <option value="user">User</option>
+                                <option value="admin">Admin</option>
+                            </select>
+                        </div>
+                        <div style="display: flex; gap: 10px;">
+                            <button type="submit" class="btn-primary" id="btn-save-user" style="height: 46px;">Lưu User</button>
+                            <button type="button" class="btn-secondary hidden" id="btn-cancel-user-edit" style="height: 46px;">Hủy Sửa</button>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="glass-panel">
+                    <h3 style="margin-bottom: 20px;">👥 Danh Sách Người Dùng</h3>
+                    <div class="table-container">
+                        <table class="modern-table">
+                            <thead>
+                                <tr>
+                                    <th>Tên Tài Khoản</th>
+                                    <th>Quyền Hạn</th>
+                                    <th style="text-align:center;">Hành Động</th>
+                                </tr>
+                            </thead>
+                            <tbody id="users-table-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <!-- ===== END TAB: QUẢN LÝ NGƯỜI DÙNG ===== -->
 
         </main>
     </div>
@@ -671,45 +715,6 @@
 
     <!-- MODALS (kept for user management and link editing) -->
     <div id="modal-overlay" class="modal-overlay hidden">
-        <div id="modal-users" class="modal glass-panel hidden" style="width: 600px; max-width: 95%;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-                <h3>👥 Quản Lý Người Dùng</h3>
-                <button type="button" class="btn-secondary btn-close-modal">Đóng</button>
-            </div>
-            
-            <div class="glass-panel" style="background: rgba(255,255,255,0.03); padding: 15px; margin-bottom: 20px;">
-                <h4 style="margin-bottom: 12px; font-size: 0.9em; text-transform: uppercase; color: var(--text-secondary);">Thêm Người Dùng Mới</h4>
-                <form id="add-user-form" style="display:flex; gap:10px; flex-wrap:wrap; align-items: flex-end;">
-                    <div class="input-group" style="margin:0; flex:1; min-width: 120px;">
-                        <label>Tài khoản</label>
-                        <input type="text" id="new-user-name" required placeholder="Tên đăng nhập">
-                    </div>
-                    <div class="input-group" style="margin:0; flex:1; min-width: 120px;">
-                        <label>Mật khẩu</label>
-                        <input type="password" id="new-user-pass" required placeholder="Mật khẩu">
-                    </div>
-                    <div class="input-group" style="margin:0; width: 100px;">
-                        <label>Vai trò</label>
-                        <select id="new-user-role">
-                            <option value="user">User</option>
-                            <option value="admin">Admin</option>
-                        </select>
-                    </div>
-                    <button type="submit" class="btn-primary" style="height: 42px;">Thêm</button>
-                </form>
-            </div>
-
-            <div class="table-container" style="max-height: 300px; overflow-y: auto;">
-                <table class="modern-table">
-                    <thead>
-                        <tr>
-                            <th>Tài khoản</th><th>Vai trò</th><th>Thao tác</th>
-                        </tr>
-                    </thead>
-                    <tbody id="users-table-body"></tbody>
-                </table>
-            </div>
-        </div>
         <div id="modal-password" class="modal glass-panel hidden" style="width: 400px;">
             <h3>Đổi Mật Khẩu</h3>
             <form id="change-pass-form">
