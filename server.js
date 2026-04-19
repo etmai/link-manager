@@ -11,11 +11,16 @@ const http = require('http');
 const rateLimit = require('express-rate-limit');
 const helmet = require('helmet');
 const cors = require('cors');
+const axios = require('axios');
+const FormData = require('form-data');
 require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-change-in-production';
+const TRELLO_API_KEY = process.env.TRELLO_API_KEY || '';
+const TRELLO_TOKEN = process.env.TRELLO_TOKEN || '';
+const TRELLO_BOARD_ID = process.env.TRELLO_BOARD_ID || '';
 
 app.set('trust proxy', 1);
 
@@ -136,7 +141,9 @@ async function initDb() {
             userId TEXT NOT NULL,
             status TEXT NOT NULL DEFAULT 'pending',
             createdBy TEXT,
-            createdAt TEXT NOT NULL
+            createdAt TEXT NOT NULL,
+            trelloCardId TEXT,
+            attachments TEXT DEFAULT '[]'
         );
         CREATE TABLE IF NOT EXISTS sample_requests (
             id TEXT PRIMARY KEY,
@@ -177,6 +184,12 @@ async function initDb() {
     const scheduleColNames = scheduleCols.map(c => c.name);
     if (!scheduleColNames.includes('createdBy')) {
         await db.run("ALTER TABLE work_schedule ADD COLUMN createdBy TEXT");
+    }
+    if (!scheduleColNames.includes('trelloCardId')) {
+        await db.run("ALTER TABLE work_schedule ADD COLUMN trelloCardId TEXT");
+    }
+    if (!scheduleColNames.includes('attachments')) {
+        await db.run("ALTER TABLE work_schedule ADD COLUMN attachments TEXT DEFAULT '[]'");
     }
 
     // Migration for sales_entries — ensure all required columns exist
@@ -768,6 +781,90 @@ app.put('/api/merchants/:id', authenticateToken, requireAdmin, async (req, res) 
     } catch (err) { res.status(400).json({ error: 'Tên merchant đã tồn tại hoặc lỗi!' }); }
 });
 
+// =========== TRELLO HELPER FUNCTIONS ===========
+async function createTrelloCard(title, description, dueDate) {
+    if (!TRELLO_API_KEY || !TRELLO_TOKEN || !TRELLO_BOARD_ID) {
+        console.warn('Trello credentials not configured');
+        return null;
+    }
+    
+    try {
+        const response = await axios.post(
+            `https://api.trello.com/1/cards`,
+            {
+                name: title,
+                desc: description || '',
+                idBoard: TRELLO_BOARD_ID,
+                due: dueDate ? new Date(dueDate).toISOString() : null
+            },
+            {
+                params: {
+                    key: TRELLO_API_KEY,
+                    token: TRELLO_TOKEN
+                }
+            }
+        );
+        return response.data.id;
+    } catch (error) {
+        console.error('Error creating Trello card:', error.response?.data || error.message);
+        return null;
+    }
+}
+
+
+
+async function getTrelloAttachments(cardId) {
+    if (!TRELLO_API_KEY || !TRELLO_TOKEN || !cardId) {
+        return [];
+    }
+    
+    try {
+        const response = await axios.get(
+            `https://api.trello.com/1/cards/${cardId}/attachments`,
+            {
+                params: {
+                    key: TRELLO_API_KEY,
+                    token: TRELLO_TOKEN
+                }
+            }
+        );
+        return response.data.map(att => ({
+            id: att.id,
+            name: att.name,
+            url: att.url,
+            previewUrl: att.previewUrl,
+            mimeType: att.mimeType,
+            bytes: att.bytes,
+            date: att.date
+        }));
+    } catch (error) {
+        console.error('Error getting Trello attachments:', error.response?.data || error.message);
+        return [];
+    }
+}
+
+async function deleteTrelloAttachment(cardId, attachmentId) {
+    if (!TRELLO_API_KEY || !TRELLO_TOKEN || !cardId) {
+        throw new Error('Trello credentials not configured');
+    }
+    
+    try {
+        await axios.delete(
+            `https://api.trello.com/1/cards/${cardId}/attachments/${attachmentId}`,
+            {
+                params: {
+                    key: TRELLO_API_KEY,
+                    token: TRELLO_TOKEN
+                }
+            }
+        );
+        return true;
+    } catch (error) {
+        console.error('Error deleting Trello attachment:', error.response?.data || error.message);
+        throw error;
+    }
+}
+
 // =========== WORK SCHEDULE CRUD ===========
 app.get('/api/schedule', authenticateToken, async (req, res) => {
     const { user } = req.query;
@@ -787,7 +884,33 @@ app.get('/api/schedule', authenticateToken, async (req, res) => {
     
     query += ' ORDER BY date ASC, createdAt ASC';
     const rows = await db.all(query, params);
-    res.json(rows);
+    
+    // Parse attachments JSON and fetch from Trello if card exists
+    const enrichedRows = await Promise.all(rows.map(async row => {
+        let attachments = [];
+        try {
+            attachments = JSON.parse(row.attachments || '[]');
+        } catch (e) {
+            attachments = [];
+        }
+        
+        // If we have a trelloCardId, fetch attachments from Trello
+        if (row.trelloCardId) {
+            const trelloAttachments = await getTrelloAttachments(row.trelloCardId);
+            // Merge local and Trello attachments
+            attachments = [...attachments, ...trelloAttachments.map(att => ({
+                ...att,
+                fromTrello: true
+            }))];
+        }
+        
+        return {
+            ...row,
+            attachments
+        };
+    }));
+    
+    res.json(enrichedRows);
 });
 
 app.post('/api/schedule', authenticateToken, async (req, res) => {
@@ -801,11 +924,18 @@ app.post('/api/schedule', authenticateToken, async (req, res) => {
     }
 
     const id = randomUUID();
+    
+    // Create Trello card if configured
+    let trelloCardId = null;
+    if (TRELLO_API_KEY && TRELLO_TOKEN && TRELLO_BOARD_ID) {
+        trelloCardId = await createTrelloCard(title, description, date);
+    }
+    
     await db.run(
-        'INSERT INTO work_schedule (id, title, description, date, userId, status, createdBy, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-        [id, title.trim(), description || '', date, targetUser, 'pending', req.user.username, new Date().toISOString()]
+        'INSERT INTO work_schedule (id, title, description, date, userId, status, createdBy, createdAt, trelloCardId, attachments) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [id, title.trim(), description || '', date, targetUser, 'pending', req.user.username, new Date().toISOString(), trelloCardId, '[]']
     );
-    res.json({ success: true, id });
+    res.json({ success: true, id, trelloCardId });
 });
 
 app.put('/api/schedule/:id', authenticateToken, async (req, res) => {
@@ -826,6 +956,28 @@ app.put('/api/schedule/:id', authenticateToken, async (req, res) => {
         targetUser = userId;
     }
 
+    // Update Trello card if it exists and title/description changed
+    if (entry.trelloCardId && TRELLO_API_KEY && TRELLO_TOKEN) {
+        try {
+            await axios.put(
+                `https://api.trello.com/1/cards/${entry.trelloCardId}`,
+                {
+                    name: title || entry.title,
+                    desc: description !== undefined ? description : entry.description,
+                    due: date ? new Date(date).toISOString() : null
+                },
+                {
+                    params: {
+                        key: TRELLO_API_KEY,
+                        token: TRELLO_TOKEN
+                    }
+                }
+            );
+        } catch (error) {
+            console.error('Error updating Trello card:', error.response?.data || error.message);
+        }
+    }
+
     await db.run(
         'UPDATE work_schedule SET title = ?, description = ?, date = ?, status = ?, userId = ? WHERE id = ?',
         [title || entry.title, description !== undefined ? description : entry.description, date || entry.date, status || entry.status, targetUser, id]
@@ -843,7 +995,180 @@ app.delete('/api/schedule/:id', authenticateToken, async (req, res) => {
         return res.status(403).json({ error: 'Bạn không có quyền xóa công việc này!' });
     }
 
+    // Delete Trello card if it exists
+    if (entry.trelloCardId && TRELLO_API_KEY && TRELLO_TOKEN) {
+        try {
+            await axios.delete(
+                `https://api.trello.com/1/cards/${entry.trelloCardId}`,
+                {
+                    params: {
+                        key: TRELLO_API_KEY,
+                        token: TRELLO_TOKEN
+                    }
+                }
+            );
+        } catch (error) {
+            console.error('Error deleting Trello card:', error.response?.data || error.message);
+        }
+    }
+
     await db.run('DELETE FROM work_schedule WHERE id = ?', [id]);
+    res.json({ success: true });
+});
+
+// =========== ATTACHMENT ENDPOINTS ===========
+app.post('/api/schedule/:id/attachments/upload', authenticateToken, async (req, res) => {
+    const { id } = req.params;
+    const { fileName, fileData, mimeType } = req.body;
+    
+    if (!fileName || !fileData) {
+        return res.status(400).json({ error: 'Thiếu dữ liệu file!' });
+    }
+    
+    const entry = await db.get('SELECT * FROM work_schedule WHERE id = ?', [id]);
+    if (!entry) return res.status(404).json({ error: 'Không tìm thấy công việc!' });
+    
+    // Permission check
+    if (entry.userId !== req.user.username && req.user.role !== 'admin') {
+        return res.status(403).json({ error: 'Bạn không có quyền thêm file vào công việc này!' });
+    }
+    
+    // If no Trello card, create one
+    let cardId = entry.trelloCardId;
+    if (!cardId && TRELLO_API_KEY && TRELLO_TOKEN && TRELLO_BOARD_ID) {
+        cardId = await createTrelloCard(entry.title, entry.description, entry.date);
+        if (cardId) {
+            await db.run('UPDATE work_schedule SET trelloCardId = ? WHERE id = ?', [cardId, id]);
+        }
+    }
+    
+    if (!cardId) {
+        return res.status(500).json({ error: 'Không thể tạo Trello card. Vui lòng kiểm tra cấu hình Trello.' });
+    }
+    
+    try {
+        // Decode base64 data
+        const buffer = Buffer.from(fileData.split(',')[1], 'base64');
+        
+        // Upload to Trello using form-data
+        const formData = new FormData();
+        formData.append('file', buffer, {
+            filename: fileName,
+            contentType: mimeType || 'application/octet-stream'
+        });
+        
+        const response = await axios.post(
+            `https://api.trello.com/1/cards/${cardId}/attachments`,
+            formData,
+            {
+                params: {
+                    key: TRELLO_API_KEY,
+                    token: TRELLO_TOKEN
+                },
+                headers: {
+                    ...formData.getHeaders()
+                }
+            }
+        );
+        
+        const attachment = response.data;
+        
+        // Store reference in database
+        let attachments = [];
+        try {
+            attachments = JSON.parse(entry.attachments || '[]');
+        } catch (e) {
+            attachments = [];
+        }
+        
+        attachments.push({
+            id: attachment.id,
+            name: attachment.name,
+            url: attachment.url,
+            previewUrl: attachment.previewUrl,
+            mimeType: attachment.mimeType,
+            bytes: attachment.bytes,
+            date: attachment.date,
+            fromTrello: true
+        });
+        
+        await db.run(
+            'UPDATE work_schedule SET attachments = ? WHERE id = ?',
+            [JSON.stringify(attachments), id]
+        );
+        
+        res.json({ success: true, attachment });
+    } catch (error) {
+        console.error('Error uploading attachment:', error.response?.data || error.message);
+        res.status(500).json({ error: 'Không thể upload file: ' + (error.response?.data?.message || error.message) });
+    }
+});
+
+app.get('/api/schedule/:id/attachments', authenticateToken, async (req, res) => {
+    const { id } = req.params;
+    
+    const entry = await db.get('SELECT * FROM work_schedule WHERE id = ?', [id]);
+    if (!entry) return res.status(404).json({ error: 'Không tìm thấy công việc!' });
+    
+    // Permission check
+    if (entry.userId !== req.user.username && req.user.role !== 'admin') {
+        return res.status(403).json({ error: 'Bạn không có quyền xem file của công việc này!' });
+    }
+    
+    let attachments = [];
+    try {
+        attachments = JSON.parse(entry.attachments || '[]');
+    } catch (e) {
+        attachments = [];
+    }
+    
+    // Fetch from Trello if card exists
+    if (entry.trelloCardId) {
+        const trelloAttachments = await getTrelloAttachments(entry.trelloCardId);
+        attachments = [...attachments, ...trelloAttachments.map(att => ({
+            ...att,
+            fromTrello: true
+        }))];
+    }
+    
+    res.json(attachments);
+});
+
+app.delete('/api/schedule/:id/attachments/:attachmentId', authenticateToken, async (req, res) => {
+    const { id, attachmentId } = req.params;
+    
+    const entry = await db.get('SELECT * FROM work_schedule WHERE id = ?', [id]);
+    if (!entry) return res.status(404).json({ error: 'Không tìm thấy công việc!' });
+    
+    // Permission check
+    if (entry.userId !== req.user.username && req.user.role !== 'admin') {
+        return res.status(403).json({ error: 'Bạn không có quyền xóa file này!' });
+    }
+    
+    // Delete from Trello if card exists
+    if (entry.trelloCardId) {
+        try {
+            await deleteTrelloAttachment(entry.trelloCardId, attachmentId);
+        } catch (error) {
+            console.error('Error deleting attachment from Trello:', error.response?.data || error.message);
+        }
+    }
+    
+    // Remove from database
+    let attachments = [];
+    try {
+        attachments = JSON.parse(entry.attachments || '[]');
+    } catch (e) {
+        attachments = [];
+    }
+    
+    attachments = attachments.filter(att => att.id !== attachmentId);
+    
+    await db.run(
+        'UPDATE work_schedule SET attachments = ? WHERE id = ?',
+        [JSON.stringify(attachments), id]
+    );
+    
     res.json({ success: true });
 });
 
