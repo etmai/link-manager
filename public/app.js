@@ -258,6 +258,9 @@ const DOM = {
     taskAssigneeInput: document.getElementById('task-assignee-input'),
     taskTitleInput: document.getElementById('task-title-input'),
     taskDescInput: document.getElementById('task-desc-input'),
+    taskFileInput: document.getElementById('task-file-input'),
+    btnUploadFiles: document.getElementById('btn-upload-files'),
+    taskFilesList: document.getElementById('task-files-list'),
     btnSaveTask: document.getElementById('btn-save-task'),
 
     modalTaskDetail: document.getElementById('modal-task-detail'),
@@ -267,6 +270,7 @@ const DOM = {
     detailTaskCreator: document.getElementById('detail-task-creator'),
     detailTaskDate: document.getElementById('detail-task-date'),
     detailTaskDesc: document.getElementById('detail-task-desc'),
+    detailTaskFiles: document.getElementById('detail-task-files'),
     adminDetailActions: document.getElementById('admin-detail-actions'),
     btnToggleStatusFromDetail: document.getElementById('btn-toggle-status-from-detail'),
     btnEditTaskFromDetail: document.getElementById('btn-edit-task-from-detail'),
@@ -1797,10 +1801,24 @@ window.openTaskDetail = function(id) {
     DOM.detailTaskTitle.textContent = task.title;
     DOM.detailTaskStatus.textContent = task.status === 'completed' ? 'Đã hoàn thành' : 'Đang thực hiện';
     DOM.detailTaskStatus.className = `tag ${task.status === 'completed' ? 'tag-success' : ''}`;
-    DOM.detailTaskAssignee.textContent = task.userId;
-    DOM.detailTaskCreator.textContent = task.createdBy || task.userId;
+    DOM.detailTaskAssignee.textContent = task.userId || 'Chưa phân công';
+    DOM.detailTaskCreator.textContent = task.createdBy || task.userId || 'Unknown';
     DOM.detailTaskDate.textContent = new Date(task.date).toLocaleDateString('vi-VN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
     DOM.detailTaskDesc.textContent = task.description || 'Chưa có mô tả chi tiết.';
+    
+    // Hiển thị file đính kèm (giả lập từ data task)
+    const filesContainer = DOM.detailTaskFiles;
+    if (filesContainer) {
+        if (task.attachments && task.attachments.length > 0) {
+            filesContainer.innerHTML = task.attachments.map(f => 
+                `<span style="background: rgba(0,0,0,0.3); padding: 5px 10px; border-radius: 5px; font-size: 0.85em; display: inline-flex; align-items: center; gap: 5px; margin: 3px;">
+                    📎 ${f.name}
+                </span>`
+            ).join('');
+        } else {
+            filesContainer.innerHTML = '<em style="color: var(--text-secondary);">Chưa có file đính kèm</em>';
+        }
+    }
     
     DOM.btnToggleStatusFromDetail.innerHTML = task.status === 'completed' ? '↩️ Đánh dấu chưa xong' : '✅ Đánh dấu hoàn thành';
     DOM.btnToggleStatusFromDetail.onclick = () => {
@@ -1827,6 +1845,27 @@ window.openTaskDetail = function(id) {
     openModal(DOM.modalTaskDetail);
 };
 
+window.openAddTaskModal = function(date = null) {
+    const user = getCurrentUser();
+    DOM.taskIdInput.value = '';
+    DOM.taskDateInput.value = date || selectedDate;
+    DOM.taskTitleInput.value = '';
+    DOM.taskDescInput.value = '';
+    if (DOM.taskFileInput) DOM.taskFileInput.value = '';
+    if (DOM.taskFilesList) DOM.taskFilesList.innerHTML = '';
+    
+    if (user && user.role === 'admin') {
+        DOM.assigneeGroup.classList.remove('hidden');
+        DOM.taskAssigneeInput.value = user.username;
+    } else {
+        DOM.assigneeGroup.classList.add('hidden');
+    }
+
+    const header = document.getElementById('modal-task-header');
+    if (header) header.textContent = 'Thêm Công Việc';
+    openModal(DOM.modalTask);
+};
+
 window.openEditTask = function(id) {
     const task = cachedSchedule.find(t => t.id === id);
     if (!task) return;
@@ -1835,11 +1874,13 @@ window.openEditTask = function(id) {
     DOM.taskIdInput.value = task.id;
     DOM.taskDateInput.value = task.date;
     DOM.taskTitleInput.value = task.title;
-    DOM.taskDescInput.value = task.description;
+    DOM.taskDescInput.value = task.description || '';
+    if (DOM.taskFileInput) DOM.taskFileInput.value = '';
+    if (DOM.taskFilesList) DOM.taskFilesList.innerHTML = '';
     
     if (user && user.role === 'admin') {
         DOM.assigneeGroup.classList.remove('hidden');
-        DOM.taskAssigneeInput.value = task.userId;
+        DOM.taskAssigneeInput.value = task.userId || '';
     } else {
         DOM.assigneeGroup.classList.add('hidden');
     }
@@ -1892,6 +1933,37 @@ async function handleSaveTask() {
         renderSchedule();
     } catch (err) { showError(err.message); }
 }
+
+// Xử lý upload files (giả lập đồng bộ Trello)
+DOM.btnUploadFiles?.addEventListener('click', async () => {
+    const files = DOM.taskFileInput?.files;
+    if (!files || files.length === 0) {
+        showError('Vui lòng chọn file cần upload!');
+        return;
+    }
+    
+    const fileList = [];
+    for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        // Giả lập upload - trong thực tế sẽ gọi API upload lên server/Trello
+        fileList.push({
+            name: file.name,
+            size: (file.size / 1024).toFixed(2) + ' KB',
+            type: file.type
+        });
+    }
+    
+    // Hiển thị danh sách file đã upload
+    if (DOM.taskFilesList) {
+        DOM.taskFilesList.innerHTML = fileList.map(f => 
+            `<span style="background: rgba(0,0,0,0.3); padding: 5px 10px; border-radius: 5px; font-size: 0.85em; display: inline-flex; align-items: center; gap: 5px;">
+                📎 ${f.name} (${f.size})
+            </span>`
+        ).join('');
+    }
+    
+    alert(`✅ Đã upload ${files.length} file(s). Files sẽ được đồng bộ lên Trello khi lưu công việc!`);
+});
 
 // ====== LOGIC: SAMPLE MANAGEMENT ======
 async function renderSamplesTable() {

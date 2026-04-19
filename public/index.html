@@ -529,8 +529,16 @@
                 <input type="text" id="task-title-input" required placeholder="Nhập tên việc cần làm...">
             </div>
             <div class="input-group">
-                <label>Mô tả chi tiết</label>
-                <textarea id="task-desc-input" rows="3" placeholder="Ghi chú thêm (nếu có)..."></textarea>
+                <label>Mô tả chi tiết (Description)</label>
+                <textarea id="task-desc-input" rows="5" placeholder="Nhập mô tả chi tiết công việc tại đây..."></textarea>
+                <div style="margin-top: 10px;">
+                    <label style="font-size: 0.85em; color: var(--text-secondary);">Đính kèm file (đồng bộ lên Trello):</label>
+                    <div style="display: flex; gap: 10px; align-items: center; margin-top: 5px;">
+                        <input type="file" id="task-file-input" multiple style="flex: 1;" accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.gif,.zip,.rar">
+                        <button type="button" id="btn-upload-files" class="btn-secondary" style="white-space: nowrap;">📎 Upload Files</button>
+                    </div>
+                    <div id="task-files-list" style="margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px;"></div>
+                </div>
             </div>
             <div class="modal-actions">
                 <button type="button" class="btn-secondary btn-close-modal">Hủy</button>
@@ -560,8 +568,14 @@
                     <div id="detail-task-date">---</div>
                 </div>
                 <div class="detail-row">
-                    <label style="display:block; font-size: 0.75em; color: var(--text-secondary); margin-bottom: 5px; text-transform: uppercase;">Mô tả nội dung</label>
+                    <label style="display:block; font-size: 0.75em; color: var(--text-secondary); margin-bottom: 5px; text-transform: uppercase;">Mô tả nội dung (Description)</label>
                     <div id="detail-task-desc" style="background: rgba(0,0,0,0.2); padding: 15px; border-radius: 8px; line-height: 1.6; white-space: pre-wrap;">---</div>
+                </div>
+                <div class="detail-row">
+                    <label style="display:block; font-size: 0.75em; color: var(--text-secondary); margin-bottom: 5px; text-transform: uppercase;">File đính kèm (Trello Attachments)</label>
+                    <div id="detail-task-files" style="background: rgba(0,0,0,0.2); padding: 15px; border-radius: 8px; min-height: 40px;">
+                        <em style="color: var(--text-secondary);">Chưa có file đính kèm</em>
+                    </div>
                 </div>
             </div>
             <div class="modal-actions" style="margin-top: 30px;">
