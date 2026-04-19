@@ -119,27 +119,6 @@ const API = {
     async deleteScheduleTask(id) {
         return API.fetch(`/api/schedule/${id}`, { method: 'DELETE' });
     },
-    
-    // TRELLO INTEGRATION
-    async uploadTrelloAttachment(cardId, fileName, fileType, fileData) {
-        return API.fetch('/api/trello/upload-attachment', { 
-            method: 'POST', 
-            body: JSON.stringify({ cardId, fileName, fileType, fileData }) 
-        });
-    },
-    async getTrelloAttachments(cardId) {
-        return API.fetch(`/api/trello/card/${cardId}/attachments`);
-    },
-    async deleteTrelloAttachment(attachmentId) {
-        return API.fetch(`/api/trello/attachment/${attachmentId}`, { method: 'DELETE' });
-    },
-    async syncTrelloCard(taskId, title, description, date, action) {
-        return API.fetch('/api/trello/sync-card', { 
-            method: 'POST', 
-            body: JSON.stringify({ taskId, title, description, date, action }) 
-        });
-    },
-    
     // USERS
 
     // SAMPLES
@@ -152,9 +131,6 @@ const API = {
     },
     async deleteSample(id) {
         return API.fetch(`/api/samples/${id}`, { method: 'DELETE' });
-    },
-    async requestLink(id) {
-        return API.fetch(`/api/samples/${id}/request`, { method: 'POST' });
     },
     async cleanupExpiredSamples() {
         return API.fetch('/api/samples/cleanup-expired', { method: 'POST' });
@@ -288,16 +264,7 @@ const DOM = {
     taskAssigneeInput: document.getElementById('task-assignee-input'),
     taskTitleInput: document.getElementById('task-title-input'),
     taskDescInput: document.getElementById('task-desc-input'),
-    taskFileInput: document.getElementById('task-file-input'),
-    btnUploadFiles: document.getElementById('btn-upload-files'),
-    taskFilesList: document.getElementById('task-files-list'),
     btnSaveTask: document.getElementById('btn-save-task'),
-    taskTrelloCardIdInput: document.getElementById('task-trello-card-id'),
-    trelloAttachmentSection: document.getElementById('trello-attachment-section'),
-    trelloAttachmentsList: document.getElementById('trello-attachments-list'),
-    trelloFileInput: document.getElementById('trello-file-input'),
-    btnUploadTrelloFile: document.getElementById('btn-upload-trello-file'),
-    btnSyncTrello: document.getElementById('btn-sync-trello'),
 
     modalTaskDetail: document.getElementById('modal-task-detail'),
     detailTaskTitle: document.getElementById('detail-task-title'),
@@ -306,7 +273,6 @@ const DOM = {
     detailTaskCreator: document.getElementById('detail-task-creator'),
     detailTaskDate: document.getElementById('detail-task-date'),
     detailTaskDesc: document.getElementById('detail-task-desc'),
-    detailTaskFiles: document.getElementById('detail-task-files'),
     adminDetailActions: document.getElementById('admin-detail-actions'),
     btnToggleStatusFromDetail: document.getElementById('btn-toggle-status-from-detail'),
     btnEditTaskFromDetail: document.getElementById('btn-edit-task-from-detail'),
@@ -559,36 +525,22 @@ function setupEventListeners() {
         e.preventDefault();
         const u = DOM.usernameInput.value.trim();
         const p = DOM.passwordInput.value;
-<<<<<<< HEAD
         const loginError = document.getElementById('login-error');
         if (loginError) loginError.classList.add('hidden');
-=======
-        
-        if (!u || !p) {
-            showError('Vui lòng nhập tên đăng nhập và mật khẩu!');
-            return;
-        }
-        
->>>>>>> 97347c7485447e9b7f22ddb11596ea83d8fed2a5
         try {
             const data = await API.login(u, p);
             localStorage.setItem('lm_token', data.token);
             setCurrentUser(data.user);
             showDashboard(data.user);
-            DOM.usernameInput.value = '';
             DOM.passwordInput.value = '';
             await Promise.all([loadAppData(), loadSalesData()]);
         } catch (err) {
-<<<<<<< HEAD
             if (loginError) {
                 loginError.textContent = err.message || 'Tên đăng nhập hoặc mật khẩu không đúng!';
                 loginError.classList.remove('hidden');
             } else {
                 showError(err.message);
             }
-=======
-            showError('❌ Tên đăng nhập hoặc mật khẩu không đúng!');
->>>>>>> 97347c7485447e9b7f22ddb11596ea83d8fed2a5
         }
     });
 
@@ -860,17 +812,10 @@ function setupEventListeners() {
             if (id) window.handleDeleteLink(id);
         }
 
-<<<<<<< HEAD
         // 4. TAB: SAMPLES (Add/Sửa/Xóa)
-=======
-        // 3. TAB: SAMPLES (Add/Sửa/Xóa/Request)
->>>>>>> 97347c7485447e9b7f22ddb11596ea83d8fed2a5
         else if (btn.classList.contains('btn-add-link') || btn.classList.contains('btn-edit-sample')) {
             const link = btn.getAttribute('data-link') || 'N/A';
             if (id) window.handleEditSampleLink(id, link);
-        } else if (btn.classList.contains('btn-request-link')) {
-            // User clicked Request button for expired/process samples
-            if (id) window.handleRequestLink(id);
         } else if (btn.classList.contains('btn-delete-sample')) {
             if (id) window.handleDeleteSample(id);
         }
@@ -2331,24 +2276,10 @@ window.openTaskDetail = function(id) {
     DOM.detailTaskTitle.textContent = task.title;
     DOM.detailTaskStatus.textContent = task.status === 'completed' ? 'Đã hoàn thành' : 'Đang thực hiện';
     DOM.detailTaskStatus.className = `tag ${task.status === 'completed' ? 'tag-success' : ''}`;
-    DOM.detailTaskAssignee.textContent = task.userId || 'Chưa phân công';
-    DOM.detailTaskCreator.textContent = task.createdBy || task.userId || 'Unknown';
+    DOM.detailTaskAssignee.textContent = task.userId;
+    DOM.detailTaskCreator.textContent = task.createdBy || task.userId;
     DOM.detailTaskDate.textContent = new Date(task.date).toLocaleDateString('vi-VN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
     DOM.detailTaskDesc.textContent = task.description || 'Chưa có mô tả chi tiết.';
-    
-    // Hiển thị file đính kèm (giả lập từ data task)
-    const filesContainer = DOM.detailTaskFiles;
-    if (filesContainer) {
-        if (task.attachments && task.attachments.length > 0) {
-            filesContainer.innerHTML = task.attachments.map(f => 
-                `<span style="background: rgba(0,0,0,0.3); padding: 5px 10px; border-radius: 5px; font-size: 0.85em; display: inline-flex; align-items: center; gap: 5px; margin: 3px;">
-                    📎 ${f.name}
-                </span>`
-            ).join('');
-        } else {
-            filesContainer.innerHTML = '<em style="color: var(--text-secondary);">Chưa có file đính kèm</em>';
-        }
-    }
     
     DOM.btnToggleStatusFromDetail.innerHTML = task.status === 'completed' ? '↩️ Đánh dấu chưa xong' : '✅ Đánh dấu hoàn thành';
     DOM.btnToggleStatusFromDetail.onclick = () => {
@@ -2375,7 +2306,6 @@ window.openTaskDetail = function(id) {
     openModal(DOM.modalTaskDetail);
 };
 
-<<<<<<< HEAD
 function openAddTaskModal() {
     const user = getCurrentUser();
     DOM.taskIdInput.value = '';
@@ -2388,34 +2318,14 @@ function openAddTaskModal() {
         if (DOM.taskAssigneeInput.options.length > 0) {
             DOM.taskAssigneeInput.value = DOM.taskAssigneeInput.options[0].value;
         }
-=======
-window.openAddTaskModal = function(date = null) {
-    const user = getCurrentUser();
-    DOM.taskIdInput.value = '';
-    DOM.taskDateInput.value = date || selectedDate;
-    DOM.taskTitleInput.value = '';
-    DOM.taskDescInput.value = '';
-    if (DOM.taskFileInput) DOM.taskFileInput.value = '';
-    if (DOM.taskFilesList) DOM.taskFilesList.innerHTML = '';
-    
-    if (user && user.role === 'admin') {
-        DOM.assigneeGroup.classList.remove('hidden');
-        DOM.taskAssigneeInput.value = user.username;
->>>>>>> 97347c7485447e9b7f22ddb11596ea83d8fed2a5
     } else {
         DOM.assigneeGroup.classList.add('hidden');
     }
 
     const header = document.getElementById('modal-task-header');
-<<<<<<< HEAD
     if (header) header.textContent = 'Thêm Công Việc Mới';
     openModal(DOM.modalTask);
 }
-=======
-    if (header) header.textContent = 'Thêm Công Việc';
-    openModal(DOM.modalTask);
-};
->>>>>>> 97347c7485447e9b7f22ddb11596ea83d8fed2a5
 
 window.openEditTask = function(id) {
     const task = cachedSchedule.find(t => t.id === id);
@@ -2425,13 +2335,11 @@ window.openEditTask = function(id) {
     DOM.taskIdInput.value = task.id;
     DOM.taskDateInput.value = task.date;
     DOM.taskTitleInput.value = task.title;
-    DOM.taskDescInput.value = task.description || '';
-    if (DOM.taskFileInput) DOM.taskFileInput.value = '';
-    if (DOM.taskFilesList) DOM.taskFilesList.innerHTML = '';
+    DOM.taskDescInput.value = task.description;
     
     if (user && user.role === 'admin') {
         DOM.assigneeGroup.classList.remove('hidden');
-        DOM.taskAssigneeInput.value = task.userId || '';
+        DOM.taskAssigneeInput.value = task.userId;
     } else {
         DOM.assigneeGroup.classList.add('hidden');
     }
@@ -2485,37 +2393,6 @@ async function handleSaveTask() {
     } catch (err) { showError(err.message); }
 }
 
-// Xử lý upload files (giả lập đồng bộ Trello)
-DOM.btnUploadFiles?.addEventListener('click', async () => {
-    const files = DOM.taskFileInput?.files;
-    if (!files || files.length === 0) {
-        showError('Vui lòng chọn file cần upload!');
-        return;
-    }
-    
-    const fileList = [];
-    for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        // Giả lập upload - trong thực tế sẽ gọi API upload lên server/Trello
-        fileList.push({
-            name: file.name,
-            size: (file.size / 1024).toFixed(2) + ' KB',
-            type: file.type
-        });
-    }
-    
-    // Hiển thị danh sách file đã upload
-    if (DOM.taskFilesList) {
-        DOM.taskFilesList.innerHTML = fileList.map(f => 
-            `<span style="background: rgba(0,0,0,0.3); padding: 5px 10px; border-radius: 5px; font-size: 0.85em; display: inline-flex; align-items: center; gap: 5px;">
-                📎 ${f.name} (${f.size})
-            </span>`
-        ).join('');
-    }
-    
-    alert(`✅ Đã upload ${files.length} file(s). Files sẽ được đồng bộ lên Trello khi lưu công việc!`);
-});
-
 // ====== LOGIC: SAMPLE MANAGEMENT ======
 async function renderSamplesTable() {
     const user = getCurrentUser();
@@ -2536,16 +2413,8 @@ async function renderSamplesTable() {
         return designId.toLowerCase().includes(searchKey);
     });
 
-    // Helper function to check if sample is expired
-    function isExpired(expiryDate) {
-        if (!expiryDate || expiryDate === 'N/A') return false;
-        const today = new Date().toISOString().split('T')[0];
-        return expiryDate < today;
-    }
-
     filtered.forEach(s => {
         const tr = document.createElement('tr');
-<<<<<<< HEAD
         const hasLink = s.productLink && s.productLink !== 'N/A';
 
         let statusCell = '';
@@ -2554,27 +2423,6 @@ async function renderSamplesTable() {
         } else if (s.status === 'Process') {
             if (isAdmin) {
                 statusCell = `<button class="btn-small btn-primary btn-add-link" data-id="${s.id}" data-link="N/A">Add</button>`;
-=======
-        const statusClass = s.status === 'Process' ? 'tag-warning' : (s.status === 'Live' ? 'tag-success' : '');
-        const expired = isExpired(s.expiryDate);
-        
-        let linkDisplay = '';
-        if (s.productLink && s.productLink !== 'N/A' && !expired) {
-            // Status is Live and not expired - show link
-            linkDisplay = `<a href="${s.productLink}" target="_blank" title="${s.productLink}" style="font-size: 1.4em; text-decoration: none;">🔗</a>`;
-        } else if (expired || s.status === 'Process') {
-            // Expired or Process - show button based on role
-            if (isAdmin) {
-                linkDisplay = `<button class="btn-small btn-primary btn-add-link" data-id="${s.id}" data-link="${s.productLink || 'N/A'}">➕ Add</button>`;
-            } else {
-                // User role - show Request button
-                linkDisplay = `<button class="btn-small btn-warning btn-request-link" data-id="${s.id}">📩 Request</button>`;
-            }
-        } else {
-            // Fallback
-            if (isAdmin) {
-                linkDisplay = `<button class="btn-small btn-primary btn-add-link" data-id="${s.id}" data-link="${s.productLink || 'N/A'}">➕ Add</button>`;
->>>>>>> 97347c7485447e9b7f22ddb11596ea83d8fed2a5
             } else {
                 statusCell = `<span class="tag tag-warning">Process</span>`;
             }
@@ -2599,14 +2447,8 @@ async function renderSamplesTable() {
             <td><span class="date-text">${s.requestDate}</span></td>
             <td style="font-weight:600; color:var(--accent-color);">${s.designId}</td>
             <td>${s.requester}</td>
-<<<<<<< HEAD
             <td>${statusCell}</td>
             <td>${s.expiryDate}</td>
-=======
-            <td><span class="tag ${statusClass}">${expired ? 'Hết Hạn' : s.status}</span></td>
-            <td style="max-width:250px; overflow:hidden; text-overflow:ellipsis;">${linkDisplay}</td>
-            <td>${expired ? '<span style="color:red;font-weight:bold;">' + s.expiryDate + '</span>' : s.expiryDate}</td>
->>>>>>> 97347c7485447e9b7f22ddb11596ea83d8fed2a5
             ${isAdmin || (user && s.requester === user.username) ? adminActions : ''}
         `;
         
@@ -2642,16 +2484,6 @@ window.handleDeleteSample = function(id) {
     DOM.confirmDeleteId.value = id;
     DOM.confirmDeleteMsg.textContent = `Bạn có chắc muốn xóa ${label}? Hành động này không thể hoàn tác.`;
     openModal(DOM.modalConfirmDelete);
-};
-
-window.handleRequestLink = async function(id) {
-    if (!confirm('Bạn có chắc muốn gửi yêu cầu cấp link mới cho mẫu này?')) return;
-    try {
-        await API.requestLink(id);
-        alert('✅ Yêu cầu đã được gửi thành công! Admin sẽ xem xét và thêm link sớm.');
-        cachedSamples = await API.getSamples();
-        renderSamplesTable();
-    } catch (err) { showError(err.message); }
 };
 
 // Start app

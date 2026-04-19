@@ -1,11 +1,41 @@
 ```
+# Database files
+*.sqlite
+*.db
+*.db-journal
+
+# Compiled and build artifacts
+*.pyc
+__pycache__/
+*.o
+*.obj
+*.class
+*.exe
+*.dll
+*.so
+*.a
+*.out
+
+# Dependencies
+.venv/
+venv/
 node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
+dist/
+build/
+target/
+.gradle/
+.mypy_cache/
+.pytest_cache/
+
+# Logs and temp files
+*.log
+*.tmp
+*.swp
+*.swo
+
+# Environment
 .env
 .env.local
-<<<<<<< HEAD
 *.env.*
 
 # Editors
@@ -42,13 +72,8 @@ htmlcov/
 *.Z
 *.lz
 *.lzo
-<<<<<<< HEAD
 ```
+dinoz-sale-upload.zip
+link-manager.zip
+update_v5_schedule.zip
 *.zip
-=======
-```
->>>>>>> 97347c7485447e9b7f22ddb11596ea83d8fed2a5
-=======
-.env.*
-```
->>>>>>> parent of 1fd1bca (Revert "Merge pull request #4 from etmai/trello_api_integrations-99fec")
