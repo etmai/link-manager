@@ -777,6 +777,7 @@
             <h3 id="modal-task-header">Thêm Công Việc</h3>
             <input type="hidden" id="task-id">
             <input type="hidden" id="task-date">
+            <input type="hidden" id="task-trello-card-id">
             <div class="input-group" id="assignee-group" class="hidden">
                 <label>Giao cho nhân viên</label>
                 <select id="task-assignee-input"></select>
@@ -789,9 +790,22 @@
                 <label>Mô tả chi tiết</label>
                 <textarea id="task-desc-input" rows="3" placeholder="Ghi chú thêm (nếu có)..."></textarea>
             </div>
+            
+            <!-- Trello Attachment Section -->
+            <div class="input-group" id="trello-attachment-section" style="display: none;">
+                <label>📎 File đính kèm (Trello)</label>
+                <div id="trello-attachments-list" style="margin-bottom: 10px;"></div>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <input type="file" id="trello-file-input" accept="image/*,.pdf,.doc,.docx,.txt" style="flex: 1;">
+                    <button type="button" id="btn-upload-trello-file" class="btn-primary" style="padding: 8px 16px; font-size: 0.85em;">⬆️ Tải lên</button>
+                </div>
+                <p style="font-size: 0.75em; color: var(--text-secondary); margin-top: 5px;">Giới hạn: 10MB (tài khoản miễn phí), 250MB (trả phí)</p>
+            </div>
+            
             <div class="modal-actions">
                 <button type="button" class="btn-secondary btn-close-modal">Hủy</button>
                 <button type="button" class="btn-primary" id="btn-save-task">Lưu Công Việc</button>
+                <button type="button" class="btn-secondary" id="btn-sync-trello" title="Đồng bộ với Trello" style="margin-left: 10px;">🔄 Trello</button>
             </div>
         </div>
 

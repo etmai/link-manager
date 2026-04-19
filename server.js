@@ -11,6 +11,8 @@ const http = require('http');
 const rateLimit = require('express-rate-limit');
 const helmet = require('helmet');
 const cors = require('cors');
+const axios = require('axios');
+const FormData = require('form-data');
 require('dotenv').config();
 
 const app = express();
@@ -136,7 +138,8 @@ async function initDb() {
             userId TEXT NOT NULL,
             status TEXT NOT NULL DEFAULT 'pending',
             createdBy TEXT,
-            createdAt TEXT NOT NULL
+            createdAt TEXT NOT NULL,
+            trelloCardId TEXT
         );
         CREATE TABLE IF NOT EXISTS sample_requests (
             id TEXT PRIMARY KEY,
@@ -177,6 +180,9 @@ async function initDb() {
     const scheduleColNames = scheduleCols.map(c => c.name);
     if (!scheduleColNames.includes('createdBy')) {
         await db.run("ALTER TABLE work_schedule ADD COLUMN createdBy TEXT");
+    }
+    if (!scheduleColNames.includes('trelloCardId')) {
+        await db.run("ALTER TABLE work_schedule ADD COLUMN trelloCardId TEXT");
     }
 
     // Migration for sales_entries — ensure all required columns exist
@@ -845,6 +851,195 @@ app.delete('/api/schedule/:id', authenticateToken, async (req, res) => {
 
     await db.run('DELETE FROM work_schedule WHERE id = ?', [id]);
     res.json({ success: true });
+});
+
+// =========== TRELLO INTEGRATION ===========
+// Helper function to get Trello credentials from environment
+function getTrelloConfig() {
+    return {
+        apiKey: process.env.TRELLO_API_KEY,
+        token: process.env.TRELLO_TOKEN,
+        boardId: process.env.TRELLO_BOARD_ID
+    };
+}
+
+// Upload file attachment to Trello card
+app.post('/api/trello/upload-attachment', authenticateToken, async (req, res) => {
+    try {
+        const { cardId, fileName, fileType, fileData } = req.body;
+        
+        if (!cardId || !fileData) {
+            return res.status(400).json({ error: 'Card ID và dữ liệu file là bắt buộc!' });
+        }
+        
+        const config = getTrelloConfig();
+        if (!config.apiKey || !config.token) {
+            return res.status(500).json({ error: 'Chưa cấu hình Trello API Key và Token!' });
+        }
+        
+        // Convert base64 to buffer
+        const buffer = Buffer.from(fileData.split(',')[1], 'base64');
+        
+        // Create form data for Trello API
+        const formData = new FormData();
+        formData.append('file', buffer, {
+            filename: fileName || 'attachment',
+            contentType: fileType || 'application/octet-stream'
+        });
+        
+        // Upload to Trello
+        const response = await axios.post(
+            `https://api.trello.com/1/cards/${cardId}/attachments`,
+            formData,
+            {
+                params: {
+                    key: config.apiKey,
+                    token: config.token
+                },
+                headers: {
+                    ...formData.getHeaders()
+                }
+            }
+        );
+        
+        res.json({ 
+            success: true, 
+            attachment: {
+                id: response.data.id,
+                name: response.data.name,
+                url: response.data.url,
+                previewUrl: response.data.previewUrl
+            }
+        });
+    } catch (error) {
+        console.error('Trello upload error:', error.response?.data || error.message);
+        res.status(500).json({ 
+            error: 'Không thể tải lên Trello: ' + (error.response?.data?.msg || error.message) 
+        });
+    }
+});
+
+// Get attachments from Trello card
+app.get('/api/trello/card/:cardId/attachments', authenticateToken, async (req, res) => {
+    try {
+        const { cardId } = req.params;
+        
+        const config = getTrelloConfig();
+        if (!config.apiKey || !config.token) {
+            return res.status(500).json({ error: 'Chưa cấu hình Trello API Key và Token!' });
+        }
+        
+        const response = await axios.get(
+            `https://api.trello.com/1/cards/${cardId}/attachments`,
+            {
+                params: {
+                    key: config.apiKey,
+                    token: config.token
+                }
+            }
+        );
+        
+        res.json({ success: true, attachments: response.data });
+    } catch (error) {
+        console.error('Trello get attachments error:', error.response?.data || error.message);
+        res.status(500).json({ 
+            error: 'Không thể lấy danh sách file: ' + (error.response?.data?.msg || error.message) 
+        });
+    }
+});
+
+// Delete attachment from Trello card
+app.delete('/api/trello/attachment/:attachmentId', authenticateToken, async (req, res) => {
+    try {
+        const { attachmentId } = req.params;
+        
+        const config = getTrelloConfig();
+        if (!config.apiKey || !config.token) {
+            return res.status(500).json({ error: 'Chưa cấu hình Trello API Key và Token!' });
+        }
+        
+        await axios.delete(
+            `https://api.trello.com/1/cards/${attachmentId}`,
+            {
+                params: {
+                    key: config.apiKey,
+                    token: config.token
+                }
+            }
+        );
+        
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Trello delete attachment error:', error.response?.data || error.message);
+        res.status(500).json({ 
+            error: 'Không thể xóa file: ' + (error.response?.data?.msg || error.message) 
+        });
+    }
+});
+
+// Sync task with Trello card (create/update card in Trello)
+app.post('/api/trello/sync-card', authenticateToken, async (req, res) => {
+    try {
+        const { taskId, title, description, date, action } = req.body;
+        
+        const config = getTrelloConfig();
+        if (!config.apiKey || !config.token || !config.boardId) {
+            return res.status(500).json({ error: 'Chưa cấu hình Trello API đầy đủ!' });
+        }
+        
+        if (action === 'create') {
+            // Create new card in Trello
+            const response = await axios.post(
+                'https://api.trello.com/1/cards',
+                {
+                    name: title,
+                    desc: description,
+                    idList: config.defaultListId || (await axios.get(
+                        `https://api.trello.com/1/boards/${config.boardId}/lists`,
+                        { params: { key: config.apiKey, token: config.token } }
+                    )).data[0]?.id,
+                    due: date
+                },
+                {
+                    params: {
+                        key: config.apiKey,
+                        token: config.token
+                    }
+                }
+            );
+            
+            // Store Trello card ID in database
+            await db.run(
+                'UPDATE work_schedule SET trelloCardId = ? WHERE id = ?',
+                [response.data.id, taskId]
+            );
+            
+            res.json({ success: true, cardId: response.data.id, url: response.data.shortUrl });
+        } else if (action === 'update') {
+            // Update existing card
+            const response = await axios.put(
+                `https://api.trello.com/1/cards/${taskId}`,
+                {
+                    name: title,
+                    desc: description,
+                    due: date
+                },
+                {
+                    params: {
+                        key: config.apiKey,
+                        token: config.token
+                    }
+                }
+            );
+            
+            res.json({ success: true, url: response.data.shortUrl });
+        }
+    } catch (error) {
+        console.error('Trello sync error:', error.response?.data || error.message);
+        res.status(500).json({ 
+            error: 'Không thể đồng bộ với Trello: ' + (error.response?.data?.msg || error.message) 
+        });
+    }
 });
 
 // =========== SAMPLE REQUESTS CRUD ===========
