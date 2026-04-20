@@ -274,7 +274,9 @@ const DOM = {
     closeModalBtns: document.querySelectorAll('.btn-close-modal'),
     modalPassword: document.getElementById('modal-password'),
     modalEditLink: document.getElementById('modal-edit-link'),
-    modalEditSingleCat: document.getElementById('modal-edit-single-cat'),
+    modalManageCats: document.getElementById('modal-manage-cats'),
+    modalUniversalRename: document.getElementById('modal-universal-rename'),
+    modalConfirmDelete: document.getElementById('modal-confirm-delete'),
 
     // Schedule Elements
     calendarMonthYear: document.getElementById('calendar-month-year'),
@@ -744,6 +746,8 @@ function setupEventListeners() {
 
     // ---- EDIT LINK ----
     document.getElementById('btn-save-edit-link')?.addEventListener('click', saveEditedLink);
+    document.getElementById('btn-save-universal-rename')?.addEventListener('click', saveUniversalRename);
+    document.getElementById('btn-confirm-delete')?.addEventListener('click', confirmUniversalDelete);
 
     // ---- SAVE SAMPLE LINK ----
     DOM.btnSaveSampleLink?.addEventListener('click', async () => {
@@ -1139,43 +1143,131 @@ async function renderManageCategoriesTable() {
         tr.innerHTML = `
             <td>${c}</td>
             <td>
-                <button class="btn-small btn-edit" onclick="openEditCategoryModal('${c.replace(/'/g, "\\'")}')">Sửa</button>
-                <button class="btn-small btn-danger" onclick="handleDeleteCategory('${c.replace(/'/g, "\\'")}')">Xoá</button>
+                <button class="btn-small btn-edit" onclick="openRenameModal('category', '${c.replace(/'/g, "\\'").replace(/"/g, "&quot;")}', '${c.replace(/'/g, "\\'").replace(/"/g, "&quot;")}')">Sửa</button>
+                <button class="btn-small btn-danger" onclick="handleDeleteCategory('${c.replace(/'/g, "\\'").replace(/"/g, "&quot;")}')">Xoá</button>
             </td>
         `;
         tbody.appendChild(tr);
     });
 }
 
-window.handleDeleteCategory = async function(name) {
-    if (!confirm(`Xoá danh mục "${name}"?`)) return;
-    try {
-        await API.deleteCategory(name);
-        cachedCategories = await API.getCategories();
-        cachedLinks = await API.getLinks();
-        renderAppContent();
-        await renderManageCategoriesTable();
-    } catch (err) { showError(err.message); }
+window.openDeleteModal = function(type, id, name) {
+    const msg = document.getElementById('modal-confirm-delete-msg');
+    document.getElementById('confirm-delete-id').value = id;
+    document.getElementById('confirm-delete-type').value = type;
+    
+    // Customize message
+    const displayType = type.charAt(0).toUpperCase() + type.slice(1);
+    msg.innerHTML = `Bạn có chắc chắn muốn xóa ${displayType} <strong>"${name}"</strong> không? Hành động này không thể hoàn tác.`;
+    
+    openModal(DOM.modalConfirmDelete);
 };
 
-window.openEditCategoryModal = function(oldName) {
-    document.getElementById('edit-cat-old').value = oldName;
-    document.getElementById('edit-cat-new').value = oldName;
-    openModal(DOM.modalEditSingleCat);
-};
+async function confirmUniversalDelete() {
+    const id = document.getElementById('confirm-delete-id').value;
+    const type = document.getElementById('confirm-delete-type').value;
 
-async function saveEditedCategory() {
-    const oldName = document.getElementById('edit-cat-old').value;
-    const newName = document.getElementById('edit-cat-new').value.trim();
-    if (!newName || newName === oldName) return;
     try {
-        await API.renameCategory(oldName, newName);
-        cachedCategories = await API.getCategories();
-        cachedLinks = await API.getLinks();
-        await renderManageCategoriesTable();
-        openModal(DOM.modalManageCats);
-    } catch (err) { showError(err.message); }
+        switch(type) {
+            case 'account':
+                await API.deleteAccount(id);
+                cachedAccounts = await API.getAccounts();
+                renderAccountsTable();
+                break;
+            case 'merchant':
+                await API.deleteMerchant(id);
+                cachedMerchants = await API.getMerchants();
+                renderMerchantsTable();
+                break;
+            case 'fulfillment':
+                await API.deleteFulfillment(id);
+                cachedFulfillments = await API.getFulfillments();
+                renderFulfillmentsTable();
+                break;
+            case 'category':
+                await API.deleteCategory(id); // id is the name for categories
+                cachedCategories = await API.getCategories();
+                cachedLinks = await API.getLinks();
+                renderAppContent();
+                await renderManageCategoriesTable();
+                if (typeof renderCategoriesFullTable === 'function') renderCategoriesFullTable();
+                break;
+        }
+        
+        updateSalesDropdowns();
+        closeAllModals();
+        showSuccess('Đã xóa thành công!');
+    } catch (err) {
+        showError(err.message);
+    }
 }
+
+// Consolidate handleDeleteCategory to use the modal
+window.handleDeleteCategory = undefined; // Handled by openDeleteModal and confirmUniversalDelete
+
+window.openRenameModal = function(type, id, oldName) {
+    const title = document.getElementById('rename-modal-title');
+    const label = document.getElementById('rename-label');
+    const input = document.getElementById('rename-new-name');
+    
+    document.getElementById('rename-id').value = id;
+    document.getElementById('rename-type').value = type;
+    input.value = oldName;
+
+    // Customize labels
+    const displayType = type.charAt(0).toUpperCase() + type.slice(1);
+    title.textContent = `Sửa ${displayType}`;
+    label.textContent = `Tên ${displayType} mới:`;
+    
+    openModal(DOM.modalUniversalRename);
+    setTimeout(() => input.focus(), 100);
+};
+
+async function saveUniversalRename() {
+    const id = document.getElementById('rename-id').value;
+    const type = document.getElementById('rename-type').value;
+    const newName = document.getElementById('rename-new-name').value.trim();
+    
+    if (!newName) return;
+
+    try {
+        switch(type) {
+            case 'account':
+                await API.renameAccount(id, newName);
+                cachedAccounts = await API.getAccounts();
+                renderAccountsTable();
+                break;
+            case 'merchant':
+                await API.renameMerchant(id, newName);
+                cachedMerchants = await API.getMerchants();
+                renderMerchantsTable();
+                break;
+            case 'fulfillment':
+                await API.renameFulfillment(id, newName);
+                cachedFulfillments = await API.getFulfillments();
+                renderFulfillmentsTable();
+                break;
+            case 'category':
+                await API.renameCategory(id, newName); // id is oldName for categories
+                cachedCategories = await API.getCategories();
+                cachedLinks = await API.getLinks();
+                await renderManageCategoriesTable();
+                if (typeof renderCategoriesFullTable === 'function') renderCategoriesFullTable();
+                renderAppContent();
+                break;
+        }
+        
+        updateSalesDropdowns();
+        closeAllModals();
+        showSuccess('Cập nhật thành công!');
+    } catch (err) {
+        showError(err.message);
+    }
+}
+
+// Remove old handlers
+window.openEditCategoryModal = undefined;
+async function saveEditedCategory() { } // Handled by saveUniversalRename
 
 // ====== LOGIC: ADD LINKS ======
 function getParsedUrls() {
@@ -2096,9 +2188,9 @@ function renderAccountsTable() {
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td style="font-weight:600; color:#cbd5e1;">${acc.name}</td>
-            <td>
-                <button class="btn-small btn-edit" onclick="handleRenameAccount('${acc.id}', '${acc.name.replace(/'/g, "\\'")}')">Sửa</button>
-                <button class="btn-small btn-danger" onclick="handleDeleteAccount('${acc.id}')">Xóa</button>
+            <td style="display: flex; gap: 6px; justify-content: flex-end;">
+                <button class="btn-small btn-edit" onclick="openRenameModal('account', '${acc.id}', '${acc.name.replace(/'/g, "\\'").replace(/"/g, "&quot;")}')">Sửa</button>
+                <button class="btn-small btn-danger" onclick="openDeleteModal('account', '${acc.id}', '${acc.name.replace(/'/g, "\\'").replace(/"/g, "&quot;")}')">Xóa</button>
             </td>
         `;
         tbody.appendChild(tr);
@@ -2113,9 +2205,9 @@ function renderMerchantsTable() {
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td style="font-weight:600; color:#cbd5e1;">${m.name}</td>
-            <td>
-                <button class="btn-small btn-edit" onclick="handleRenameMerchant('${m.id}', '${m.name.replace(/'/g, "\\'")}')">Sửa</button>
-                <button class="btn-small btn-danger" onclick="handleDeleteMerchant('${m.id}')">Xóa</button>
+            <td style="display: flex; gap: 6px; justify-content: flex-end;">
+                <button class="btn-small btn-edit" onclick="openRenameModal('merchant', '${m.id}', '${m.name.replace(/'/g, "\\'").replace(/"/g, "&quot;")}')">Sửa</button>
+                <button class="btn-small btn-danger" onclick="openDeleteModal('merchant', '${m.id}', '${m.name.replace(/'/g, "\\'").replace(/"/g, "&quot;")}')">Xóa</button>
             </td>
         `;
         tbody.appendChild(tr);
@@ -2130,9 +2222,9 @@ function renderFulfillmentsTable() {
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td style="font-weight:600; color:#cbd5e1;">${f.name}</td>
-            <td>
-                <button class="btn-small btn-edit" onclick="handleRenameFulfillment('${f.id}', '${f.name.replace(/'/g, "\\'")}')">Sửa</button>
-                <button class="btn-small btn-danger" onclick="handleDeleteFulfillment('${f.id}')">Xóa</button>
+            <td style="display: flex; gap: 6px; justify-content: flex-end;">
+                <button class="btn-small btn-edit" onclick="openRenameModal('fulfillment', '${f.id}', '${f.name.replace(/'/g, "\\'").replace(/"/g, "&quot;")}')">Sửa</button>
+                <button class="btn-small btn-danger" onclick="openDeleteModal('fulfillment', '${f.id}', '${f.name.replace(/'/g, "\\'").replace(/"/g, "&quot;")}')">Xóa</button>
             </td>
         `;
         tbody.appendChild(tr);
@@ -2147,9 +2239,10 @@ function renderCategoriesFullTable() {
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td style="font-weight:600; color:#cbd5e1;">${catName}</td>
-            <td>
-                <button class="btn-small btn-edit" onclick="openRenameCategoryFull('${catName}')">Sửa</button>
-                <button class="btn-small btn-danger" onclick="handleDeleteCategory('${catName}')">Xóa</button>
+            <td style="display: flex; gap: 6px; justify-content: flex-end;">
+                <button class="btn-small btn-edit" onclick="openRenameModal('category', '${catName.replace(/'/g, "\\'").replace(/"/g, "&quot;")}', '${catName.replace(/'/g, "\\'").replace(/"/g, "&quot;")}')">Sửa</button>
+                <button class="btn-small btn-danger" onclick="openDeleteModal('category', '${catName.replace(/'/g, "\\'").replace(/"/g, "&quot;")}', '${catName.replace(/'/g, "\\'").replace(/"/g, "&quot;")}')">Xóa</button>
+                <meta charset="UTF-8">
             </td>
         `;
         tbody.appendChild(tr);
@@ -2226,68 +2319,17 @@ function setupGeneralManagementListeners() {
     });
 }
 
-window.handleDeleteAccount = async function(id) {
-    if (!confirm('Xóa account này?')) return;
-    try {
-        await API.deleteAccount(id);
-        cachedAccounts = await API.getAccounts();
-        renderAccountsTable();
-        updateSalesDropdowns();
-    } catch (err) { showError(err.message); }
-};
+// handleDeleteAccount is now handled by openDeleteModal and confirmUniversalDelete
 
-window.handleRenameAccount = async function(id, oldName) {
-    const newName = prompt('Nhập tên Account mới:', oldName);
-    if (!newName || newName.trim() === oldName || newName.trim() === '') return;
-    try {
-        await API.renameAccount(id, newName.trim());
-        cachedAccounts = await API.getAccounts();
-        renderAccountsTable();
-        updateSalesDropdowns();
-    } catch (err) { showError(err.message); }
-};
+// window.handleRenameAccount is now handled by openRenameModal
 
-window.handleDeleteMerchant = async function(id) {
-    if (!confirm('Xóa merchant này?')) return;
-    try {
-        await API.deleteMerchant(id);
-        cachedMerchants = await API.getMerchants();
-        renderMerchantsTable();
-        updateSalesDropdowns();
-    } catch (err) { showError(err.message); }
-};
+// handleDeleteMerchant is now handled by openDeleteModal and confirmUniversalDelete
 
-window.handleRenameMerchant = async function(id, oldName) {
-    const newName = prompt('Nhập tên Merchant mới:', oldName);
-    if (!newName || newName.trim() === oldName || newName.trim() === '') return;
-    try {
-        await API.renameMerchant(id, newName.trim());
-        cachedMerchants = await API.getMerchants();
-        renderMerchantsTable();
-        updateSalesDropdowns();
-    } catch (err) { showError(err.message); }
-};
+// window.handleRenameMerchant is now handled by openRenameModal
 
-window.handleDeleteFulfillment = async function(id) {
-    if (!confirm('Xóa fulfillment này?')) return;
-    try {
-        await API.deleteFulfillment(id);
-        cachedFulfillments = await API.getFulfillments();
-        renderFulfillmentsTable();
-        updateSalesDropdowns();
-    } catch (err) { showError(err.message); }
-};
+// handleDeleteFulfillment is now handled by openDeleteModal and confirmUniversalDelete
 
-window.handleRenameFulfillment = async function(id, oldName) {
-    const newName = prompt('Nhập tên Fulfillment mới:', oldName);
-    if (!newName || newName.trim() === oldName || newName.trim() === '') return;
-    try {
-        await API.renameFulfillment(id, newName.trim());
-        cachedFulfillments = await API.getFulfillments();
-        renderFulfillmentsTable();
-        updateSalesDropdowns();
-    } catch (err) { showError(err.message); }
-};
+// window.handleRenameFulfillment is now handled by openRenameModal
 
 window.adjustSalesQty = function(delta) {
     const input = document.getElementById('sales-qty');
@@ -2298,22 +2340,9 @@ window.adjustSalesQty = function(delta) {
     input.value = val;
 };
 
-window.openRenameCategoryFull = function(oldName) {
-    document.getElementById('edit-cat-old').value = oldName;
-    document.getElementById('edit-cat-new').value = oldName;
-    openModal(DOM.modalEditSingleCat);
-};
+// window.openRenameCategoryFull is now handled by openRenameModal
 
-window.handleDeleteCategory = async function(name) {
-    if (!confirm(`Xóa danh mục: ${name}?`)) return;
-    try {
-        await API.deleteCategory(name);
-        cachedCategories = await API.getCategories();
-        renderAppContent();
-        renderCategoriesFullTable();
-        updateSalesDropdowns();
-    } catch (err) { showError(err.message); }
-};
+// window.handleDeleteCategory was consolidated above
 
 // ====== LOGIC: WORK SCHEDULE ======
 async function loadScheduleData() {

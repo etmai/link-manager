@@ -211,7 +211,7 @@
                         <div class="links-display-section glass-panel">
                             <div class="table-container">
                                 <table class="modern-table">
-                                    <thead><tr><th>Tên Account</th><th style="width: 120px;">Hành Động</th></tr></thead>
+                                    <thead><tr><th>Tên Account</th><th style="width: 140px; text-align: right;">Hành Động</th></tr></thead>
                                     <tbody id="accounts-table-body"></tbody>
                                 </table>
                             </div>
@@ -237,7 +237,7 @@
                         <div class="links-display-section glass-panel">
                             <div class="table-container">
                                 <table class="modern-table">
-                                    <thead><tr><th>Tên Merchant</th><th style="width: 120px;">Hành Động</th></tr></thead>
+                                    <thead><tr><th>Tên Merchant</th><th style="width: 140px; text-align: right;">Hành Động</th></tr></thead>
                                     <tbody id="merchants-table-body"></tbody>
                                 </table>
                             </div>
@@ -263,7 +263,7 @@
                         <div class="links-display-section glass-panel">
                             <div class="table-container">
                                 <table class="modern-table">
-                                    <thead><tr><th>Tên Fulfillment</th><th style="width: 120px;">Hành Động</th></tr></thead>
+                                    <thead><tr><th>Tên Fulfillment</th><th style="width: 140px; text-align: right;">Hành Động</th></tr></thead>
                                     <tbody id="fulfillments-table-body"></tbody>
                                 </table>
                             </div>
@@ -289,7 +289,7 @@
                         <div class="links-display-section glass-panel">
                             <div class="table-container">
                                 <table class="modern-table">
-                                    <thead><tr><th>Tên Category</th><th style="width: 120px;">Hành Động</th></tr></thead>
+                                    <thead><tr><th>Tên Category</th><th style="width: 140px; text-align: right;">Hành Động</th></tr></thead>
                                     <tbody id="categories-table-body"></tbody>
                                 </table>
                             </div>
@@ -790,11 +790,12 @@
 
         <div id="modal-confirm-delete" class="modal glass-panel hidden" style="width: 380px; max-width: 95vw;">
             <h3>Xác Nhận Xóa</h3>
-            <p id="modal-confirm-delete-msg" style="font-size:0.95em; margin-bottom:16px;"></p>
+            <p id="modal-confirm-delete-msg" style="font-size:0.95em; margin-bottom:16px; color:#cbd5e1;"></p>
             <input type="hidden" id="confirm-delete-id">
+            <input type="hidden" id="confirm-delete-type">
             <div class="modal-actions">
                 <button type="button" class="btn-secondary btn-close-modal">Hủy</button>
-                <button type="button" class="btn-primary btn-danger-solid" id="btn-confirm-delete">Xóa</button>
+                <button type="button" class="btn-primary btn-danger-solid" id="btn-confirm-delete">Xác Nhận Xóa</button>
             </div>
         </div>
 
@@ -805,6 +806,31 @@
             <div class="input-group"><label>Ngày</label><input type="date" id="edit-link-date" required></div>
             <div class="input-group"><label>Danh mục</label><div class="checkbox-group" id="edit-link-categories"></div></div>
             <div class="modal-actions"><button type="button" class="btn-secondary btn-close-modal">Hủy</button><button type="button" class="btn-primary" id="btn-save-edit-link">Lưu</button></div>
+        </div>
+
+        <div id="modal-manage-cats" class="modal glass-panel hidden" style="width: 500px;">
+            <h3>Quản Lý Danh Mục</h3>
+            <div class="table-container">
+                <table class="modern-table">
+                    <thead><tr><th>Tên danh mục</th><th>Hành động</th></tr></thead>
+                    <tbody id="manage-cats-table"></tbody>
+                </table>
+            </div>
+            <div class="modal-actions"><button type="button" class="btn-secondary btn-close-modal">Đóng</button></div>
+        </div>
+
+        <div id="modal-universal-rename" class="modal glass-panel hidden" style="width: 400px;">
+            <h3 id="rename-modal-title">Sửa Thông Tin</h3>
+            <input type="hidden" id="rename-id">
+            <input type="hidden" id="rename-type">
+            <div class="input-group">
+                <label id="rename-label">Tên mới</label>
+                <input type="text" id="rename-new-name" required autocomplete="off">
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn-secondary btn-close-modal">Hủy</button>
+                <button type="button" class="btn-primary" id="btn-save-universal-rename">Lưu Thay Đổi</button>
+            </div>
         </div>
         <div id="modal-task" class="modal glass-panel hidden" style="width: 800px; max-width: 95vw;">
             <h3 id="modal-task-header">Thêm Công Việc</h3>
