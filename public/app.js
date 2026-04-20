@@ -105,6 +105,17 @@ const API = {
     async renameMerchant(id, name) {
         return API.fetch(`/api/merchants/${id}`, { method: 'PUT', body: JSON.stringify({ name }) });
     },
+    // FULFILLMENTS
+    async getFulfillments() { return API.fetch('/api/fulfillments'); },
+    async addFulfillment(name) {
+        return API.fetch('/api/fulfillments', { method: 'POST', body: JSON.stringify({ name }) });
+    },
+    async deleteFulfillment(id) {
+        return API.fetch(`/api/fulfillments/${id}`, { method: 'DELETE' });
+    },
+    async renameFulfillment(id, name) {
+        return API.fetch(`/api/fulfillments/${id}`, { method: 'PUT', body: JSON.stringify({ name }) });
+    },
     // SCHEDULE
     async getSchedule(user = '') { 
         const url = user ? `/api/schedule?user=${user}` : '/api/schedule';
@@ -141,6 +152,23 @@ const API = {
     async addFinance(data) { return API.fetch('/api/finance', { method: 'POST', body: JSON.stringify(data) }); },
     async updateFinance(id, data) { return API.fetch(`/api/finance/${id}`, { method: 'PUT', body: JSON.stringify(data) }); },
     async deleteFinance(id) { return API.fetch(`/api/finance/${id}`, { method: 'DELETE' }); },
+
+    // TRELLO
+    async syncTrelloCard(taskId) { return API.fetch(`/api/trello/sync/${taskId}`, { method: 'POST' }); },
+    async uploadTrelloFile(taskId, formData) {
+        const token = localStorage.getItem('lm_token');
+        const res = await fetch(`/api/trello/upload/${taskId}`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` },
+            body: formData
+        });
+        if (!res.ok) {
+            const data = await res.json();
+            throw new Error(data.error || 'Upload failed');
+        }
+        return res.json();
+    },
+    async getTrelloAttachments(taskId) { return API.fetch(`/api/trello/attachments/${taskId}`); }
 };
 
 // ====== APP STATE ======
@@ -150,6 +178,7 @@ let cachedLinks = [];       // Cache dữ liệu từ server
 let cachedCategories = [];  // Cache danh mục từ server
 let cachedAccounts = [];    // Cache account từ server
 let cachedMerchants = [];   // Cache merchant từ server
+let cachedFulfillments = []; // Cache fulfillment từ server
 let cachedSchedule = [];    // Cache lịch làm việc
 let cachedUsers = [];       // Cache danh sách người dùng (cho admin)
 let cachedSamples = [];     // Cache yêu cầu mẫu
@@ -181,6 +210,7 @@ function resetAppState() {
     cachedCategories = [];
     cachedAccounts = [];
     cachedMerchants = [];
+    cachedFulfillments = [];
     cachedSchedule = [];
     cachedUsers = [];
     cachedSamples = [];
@@ -217,6 +247,7 @@ const DOM = {
     linksTableBody: document.getElementById('links-table-body'),
     accountsTableBody: document.getElementById('accounts-table-body'),
     merchantsTableBody: document.getElementById('merchants-table-body'),
+    fulfillmentsTableBody: document.getElementById('fulfillments-table-body'),
     categoriesTableBody: document.getElementById('categories-table-body'),
 
     totalLinks: document.getElementById('total-links'),
@@ -253,6 +284,7 @@ const DOM = {
     adminCalendarFilters: document.getElementById('admin-calendar-filters'),
     scheduleUserFilter: document.getElementById('schedule-user-filter'),
     btnRefreshSchedule: document.getElementById('btn-refresh-schedule'),
+    scheduleNotificationsBar: document.getElementById('schedule-notifications-bar'),
     currentSelectedDate: document.getElementById('current-selected-date'),
     btnAddToday: document.getElementById('btn-add-task-today'),
     dayTaskList: document.getElementById('day-task-list'),
@@ -304,6 +336,19 @@ const DOM = {
     confirmDeleteMsg: document.getElementById('modal-confirm-delete-msg'),
     btnConfirmDelete: document.getElementById('btn-confirm-delete'),
     btnSaveSampleLink: document.getElementById('btn-save-sample-link'),
+
+    // Trello & Markdown elements
+    btnTogglePreview: document.getElementById('btn-toggle-preview'),
+    taskDescPreview: document.getElementById('task-desc-preview'),
+    trelloSection: document.getElementById('trello-section'),
+    trelloCardStatus: document.getElementById('trello-card-status'),
+    trelloAttachmentsList: document.getElementById('trello-attachments-list'),
+    trelloFileInput: document.getElementById('trello-file-input'),
+    btnTriggerUpload: document.getElementById('btn-trigger-upload'),
+    uploadProgress: document.getElementById('upload-progress'),
+    progressBar: document.getElementById('progress-bar'),
+    detailTrelloSection: document.getElementById('detail-trello-section'),
+    detailTrelloAttachments: document.getElementById('detail-trello-attachments')
 };
 
 // ====== UTILS ======
@@ -446,40 +491,37 @@ function showDashboard(user) {
 async function loadAppData() {
     try {
         const user = getCurrentUser();
-        const promises = [
+        const [links, categories, accounts, merchants, fulfillments, schedule, samples] = await Promise.all([
             API.getLinks(),
             API.getCategories(),
             API.getAccounts(),
             API.getMerchants(),
+            API.getFulfillments(),
             API.getSchedule(),
             API.getSamples()
-        ];
+        ]);
+
+        cachedLinks = links || [];
+        cachedCategories = categories || [];
+        cachedAccounts = accounts || [];
+        cachedMerchants = merchants || [];
+        cachedFulfillments = fulfillments || [];
+        cachedSchedule = schedule || [];
+        cachedSamples = samples || [];
 
         if (user && user.role === 'admin') {
-            promises.push(API.getFinance());
-            promises.push(API.getUsers());
-        }
-
-        const results = await Promise.all(promises);
-
-        cachedLinks = results[0] || [];
-        cachedCategories = results[1] || [];
-        cachedAccounts = results[2] || [];
-        cachedMerchants = results[3] || [];
-        cachedSchedule = results[4] || [];
-        cachedSamples = results[5] || [];
-
-        if (user && user.role === 'admin') {
-            cachedFinance = results[6] || [];
-            cachedUsers = results[7];
+            cachedFinance = await API.getFinance() || [];
+            cachedUsers = await API.getUsers();
             populateAdminControls();
         }
         
         renderAppContent();
         renderAccountsTable();
         renderMerchantsTable();
+        renderFulfillmentsTable();
         renderCategoriesFullTable();
         updateSalesDropdowns();
+        renderSchedule();
     } catch (err) {
         console.error("Failed to load app data:", err);
         showError('Không thể tải dữ liệu: ' + err.message);
@@ -859,6 +901,104 @@ function setupEventListeners() {
     });
 
     DOM.btnCancelUserEdit?.addEventListener('click', () => window.cancelUserEdit());
+
+    // --- TRELLO & MARKDOWN EVENTS ---
+    DOM.btnTogglePreview?.addEventListener('click', () => {
+        const isHidden = DOM.taskDescPreview.classList.contains('hidden');
+        if (isHidden) {
+            const md = DOM.taskDescInput.value;
+            DOM.taskDescPreview.innerHTML = marked.parse(md || '_Chưa có mô tả_');
+            DOM.taskDescPreview.classList.remove('hidden');
+            DOM.taskDescInput.classList.add('hidden');
+            DOM.btnTogglePreview.textContent = '✏️ Edit';
+        } else {
+            DOM.taskDescPreview.classList.add('hidden');
+            DOM.taskDescInput.classList.remove('hidden');
+            DOM.btnTogglePreview.textContent = '👁 Preview';
+        }
+    });
+
+    DOM.btnTriggerUpload?.addEventListener('click', () => DOM.trelloFileInput.click());
+
+    DOM.trelloFileInput?.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const taskId = DOM.taskIdInput.value;
+        if (!taskId) { showError('Vui lòng lưu công việc trước khi upload tệp!'); return; }
+
+        try {
+            DOM.uploadProgress.classList.remove('hidden');
+            DOM.progressBar.style.width = '0%';
+            
+            // XHMLHttpRequest for progress
+            const formData = new FormData();
+            formData.append('file', file);
+
+            const token = localStorage.getItem('lm_token');
+            const xhr = new XMLHttpRequest();
+            
+            xhr.upload.addEventListener('progress', (ev) => {
+                if (ev.lengthComputable) {
+                    const percent = (ev.loaded / ev.total) * 100;
+                    DOM.progressBar.style.width = percent + '%';
+                }
+            });
+
+            xhr.addEventListener('load', async () => {
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    showSuccess('Đã tải tệp lên Trello!');
+                    DOM.uploadProgress.classList.add('hidden');
+                    DOM.trelloFileInput.value = '';
+                    await loadTrelloAttachments(taskId);
+                } else {
+                    const err = JSON.parse(xhr.responseText);
+                    showError('Lỗi upload: ' + err.error);
+                    DOM.uploadProgress.classList.add('hidden');
+                }
+            });
+
+            xhr.addEventListener('error', () => {
+                showError('Lỗi kết nối khi upload');
+                DOM.uploadProgress.classList.add('hidden');
+            });
+
+            xhr.open('POST', `/api/trello/upload/${taskId}`);
+            xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+            xhr.send(formData);
+
+        } catch (err) {
+            showError(err.message);
+            DOM.uploadProgress.classList.add('hidden');
+        }
+    });
+}
+
+async function loadTrelloAttachments(taskId, isDetail = false) {
+    try {
+        const attachments = await API.getTrelloAttachments(taskId);
+        const container = isDetail ? DOM.detailTrelloAttachments : DOM.trelloAttachmentsList;
+        if (!container) return;
+        
+        if (attachments.length > 0) {
+            if (isDetail) DOM.detailTrelloSection.classList.remove('hidden');
+            
+            container.innerHTML = attachments.map(att => `
+                <a href="${att.url}" target="_blank" class="trello-attachment-card">
+                    <span class="trello-attachment-icon">📄</span>
+                    <div class="trello-attachment-info">
+                        <span class="trello-attachment-name" title="${att.name}">${att.name}</span>
+                        <span class="trello-attachment-date">${new Date(att.date).toLocaleDateString()}</span>
+                    </div>
+                </a>
+            `).join('');
+        } else {
+            container.innerHTML = isDetail ? '' : '<p style="font-size:0.8em; opacity:0.5;">Chưa có tệp đính kèm nào.</p>';
+            if (isDetail) DOM.detailTrelloSection.classList.add('hidden');
+        }
+    } catch (err) {
+        console.error('Failed to load Trello attachments:', err);
+    }
 }
 
 // ====== LOGIC: USERS ======
@@ -1982,6 +2122,23 @@ function renderMerchantsTable() {
     });
 }
 
+function renderFulfillmentsTable() {
+    const tbody = document.getElementById('fulfillments-table-body');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    cachedFulfillments.forEach(f => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td style="font-weight:600; color:#cbd5e1;">${f.name}</td>
+            <td>
+                <button class="btn-small btn-edit" onclick="handleRenameFulfillment('${f.id}', '${f.name.replace(/'/g, "\\'")}')">Sửa</button>
+                <button class="btn-small btn-danger" onclick="handleDeleteFulfillment('${f.id}')">Xóa</button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
 function renderCategoriesFullTable() {
     const tbody = document.getElementById('categories-table-body');
     if (!tbody) return;
@@ -2001,13 +2158,21 @@ function renderCategoriesFullTable() {
 
 function updateSalesDropdowns() {
     const accSelect = document.getElementById('sales-account');
-    if (!accSelect) return;
+    const fulSelect = document.getElementById('sales-fulfillment');
+    if (!accSelect || !fulSelect) return;
 
     accSelect.innerHTML = '<option value="">-- Chọn Account --</option>';
     cachedAccounts.forEach(acc => {
         const name = (acc.name || '').trim();
         if (!name) return;
         accSelect.innerHTML += `<option value="${name}">${name}</option>`;
+    });
+
+    fulSelect.innerHTML = '<option value="">-- Chọn Fulfillment --</option>';
+    cachedFulfillments.forEach(f => {
+        const name = (f.name || '').trim();
+        if (!name) return;
+        fulSelect.innerHTML += `<option value="${name}">${name}</option>`;
     });
 }
 
@@ -2034,6 +2199,18 @@ function setupGeneralManagementListeners() {
             document.getElementById('new-merchant-name').value = '';
             cachedMerchants = await API.getMerchants();
             renderMerchantsTable();
+            updateSalesDropdowns();
+        } catch (err) { showError(err.message); }
+    });
+
+    document.getElementById('add-fulfillment-form')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const name = document.getElementById('new-fulfillment-name').value.trim();
+        try {
+            await API.addFulfillment(name);
+            document.getElementById('new-fulfillment-name').value = '';
+            cachedFulfillments = await API.getFulfillments();
+            renderFulfillmentsTable();
             updateSalesDropdowns();
         } catch (err) { showError(err.message); }
     });
@@ -2091,6 +2268,27 @@ window.handleRenameMerchant = async function(id, oldName) {
     } catch (err) { showError(err.message); }
 };
 
+window.handleDeleteFulfillment = async function(id) {
+    if (!confirm('Xóa fulfillment này?')) return;
+    try {
+        await API.deleteFulfillment(id);
+        cachedFulfillments = await API.getFulfillments();
+        renderFulfillmentsTable();
+        updateSalesDropdowns();
+    } catch (err) { showError(err.message); }
+};
+
+window.handleRenameFulfillment = async function(id, oldName) {
+    const newName = prompt('Nhập tên Fulfillment mới:', oldName);
+    if (!newName || newName.trim() === oldName || newName.trim() === '') return;
+    try {
+        await API.renameFulfillment(id, newName.trim());
+        cachedFulfillments = await API.getFulfillments();
+        renderFulfillmentsTable();
+        updateSalesDropdowns();
+    } catch (err) { showError(err.message); }
+};
+
 window.adjustSalesQty = function(delta) {
     const input = document.getElementById('sales-qty');
     if (!input) return;
@@ -2134,6 +2332,53 @@ async function loadScheduleData() {
 function renderSchedule() {
     renderCalendar();
     renderDayTasks();
+    renderScheduleNotifications();
+}
+
+function renderScheduleNotifications() {
+    if (!DOM.scheduleNotificationsBar) return;
+
+    const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
+    const tomorrow = new Date(now);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowStr = tomorrow.toISOString().split('T')[0];
+
+    // Filter tasks for Today and Tomorrow
+    // tasks are in cachedSchedule with date like YYYY-MM-DD
+    const upcomingTasks = cachedSchedule.filter(t => t.date === todayStr || t.date === tomorrowStr);
+
+    if (upcomingTasks.length === 0) {
+        DOM.scheduleNotificationsBar.classList.add('hidden');
+        return;
+    }
+
+    DOM.scheduleNotificationsBar.classList.remove('hidden');
+    DOM.scheduleNotificationsBar.innerHTML = `
+        <div class="notif-header">
+            <span>🔔 Sắp tới:</span>
+        </div>
+    `;
+
+    upcomingTasks.forEach(task => {
+        const isToday = task.date === todayStr;
+        const badgeClass = isToday ? 'notif-today' : 'notif-tomorrow';
+        const badgeText = isToday ? 'Hôm nay' : 'Ngày mai';
+
+        const item = document.createElement('div');
+        item.className = 'notification-item';
+        item.innerHTML = `
+            <span class="notif-badge ${badgeClass}">${badgeText}</span>
+            <span class="notif-title" title="${task.title}">${task.title}</span>
+        `;
+        item.onclick = () => {
+            selectedDate = task.date;
+            renderCalendar();
+            renderDayTasks();
+            openTaskDetail(task.id);
+        };
+        DOM.scheduleNotificationsBar.appendChild(item);
+    });
 }
 
 function renderCalendar() {
@@ -2238,6 +2483,12 @@ function renderDayTasks() {
         const div = document.createElement('div');
         div.className = 'task-item';
         div.dataset.id = t.id;
+        div.style.cursor = 'pointer';
+        div.onclick = (e) => {
+            // Prevent opening detail when clicking on buttons inside the item
+            if (e.target.closest('.task-actions') || e.target.closest('.status-toggle')) return;
+            window.openTaskDetail(t.id);
+        };
         
         const color = getUserColor(t.userId);
         const user = getCurrentUser();
@@ -2246,14 +2497,18 @@ function renderDayTasks() {
         
         const creatorTag = (user?.role === 'admin' && t.createdBy) ? `<span style="font-size: 0.75em; color: var(--text-secondary); margin-left:8px;">(Tạo bởi: ${t.createdBy})</span>` : '';
 
+        const canEdit = (user?.role === 'admin' || user?.username === t.userId);
+        const canDelete = canEdit && !(user?.role === 'user' && t.creatorRole === 'admin');
+
         div.innerHTML = `
             <div class="task-item-header">
                 <span class="task-item-title" style="${t.status === 'completed' ? 'text-decoration: line-through; opacity: 0.6;' : ''}">
                     ${userTag}${t.title}${creatorTag}
                 </span>
                 <div class="task-actions">
-                    <button class="btn-icon" data-id="${t.id}" data-action="edit" title="Sửa" style="font-size: 0.9em; padding: 4px;">✏️</button>
-                    <button class="btn-icon" data-id="${t.id}" data-action="delete" title="Xóa" style="font-size: 0.9em; padding: 4px; color: var(--danger-color);">🗑️</button>
+                    ${t.trelloCardId ? '<span title="Đã đồng bộ Trello" style="font-size:0.8em; margin-right:8px; filter:grayscale(1) brightness(2);">🔗</span>' : ''}
+                    ${canEdit ? `<button class="btn-icon" data-id="${t.id}" data-action="edit" title="Sửa" style="font-size: 0.9em; padding: 4px;">✏️</button>` : ''}
+                    ${canDelete ? `<button class="btn-icon" data-id="${t.id}" data-action="delete" title="Xóa" style="font-size: 0.9em; padding: 4px; color: var(--danger-color);">🗑️</button>` : ''}
                 </div>
             </div>
             <p class="task-item-desc">${t.description ? t.description.substring(0, 100) + (t.description.length > 100 ? '...' : '') : 'Không có mô tả'}</p>
@@ -2279,13 +2534,18 @@ window.openTaskDetail = function(id) {
     DOM.detailTaskAssignee.textContent = task.userId;
     DOM.detailTaskCreator.textContent = task.createdBy || task.userId;
     DOM.detailTaskDate.textContent = new Date(task.date).toLocaleDateString('vi-VN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-    DOM.detailTaskDesc.textContent = task.description || 'Chưa có mô tả chi tiết.';
+    DOM.detailTaskDesc.innerHTML = marked.parse(task.description || '_Chưa có mô tả chi tiết._');
+    
+    // Load Trello attachments
+    loadTrelloAttachments(task.id, true);
     
     DOM.btnToggleStatusFromDetail.innerHTML = task.status === 'completed' ? '↩️ Đánh dấu chưa xong' : '✅ Đánh dấu hoàn thành';
     DOM.btnToggleStatusFromDetail.onclick = () => {
         handleToggleTaskStatus(task.id, task.status !== 'completed');
         closeAllModals();
     };
+
+    const canDelete = (user?.role === 'admin' || user?.username === task.userId) && !(user?.role === 'user' && task.creatorRole === 'admin');
 
     if (user && user.role === 'admin') {
         DOM.adminDetailActions.classList.remove('hidden');
@@ -2294,11 +2554,33 @@ window.openTaskDetail = function(id) {
             closeAllModals();
             openEditTask(task.id);
         };
+        // Admins can always delete unless we want to restrict them too, 
+        // but here the rule is for 'user' role.
+        DOM.btnDeleteTaskFromDetail.classList.remove('hidden');
         DOM.btnDeleteTaskFromDetail.onclick = (e) => {
             e.stopPropagation();
             handleDeleteTask(task.id);
             closeAllModals();
         };
+    } else if (user && user.username === task.userId) {
+        // Owner can edit their own task, and maybe delete if not admin-created
+        DOM.adminDetailActions.classList.remove('hidden');
+        DOM.btnEditTaskFromDetail.onclick = (e) => {
+            e.stopPropagation();
+            closeAllModals();
+            openEditTask(task.id);
+        };
+        
+        if (canDelete) {
+            DOM.btnDeleteTaskFromDetail.classList.remove('hidden');
+            DOM.btnDeleteTaskFromDetail.onclick = (e) => {
+                e.stopPropagation();
+                handleDeleteTask(task.id);
+                closeAllModals();
+            };
+        } else {
+            DOM.btnDeleteTaskFromDetail.classList.add('hidden');
+        }
     } else {
         DOM.adminDetailActions.classList.add('hidden');
     }
@@ -2324,6 +2606,17 @@ function openAddTaskModal() {
 
     const header = document.getElementById('modal-task-header');
     if (header) header.textContent = 'Thêm Công Việc Mới';
+    
+    // Reset Trello & Preview UI
+    DOM.taskDescPreview.classList.add('hidden');
+    DOM.taskDescInput.classList.remove('hidden');
+    DOM.btnTogglePreview.textContent = '👁 Preview';
+    
+    // Show Trello section even for new tasks, but with a guide message
+    DOM.trelloSection.classList.remove('hidden');
+    DOM.trelloCardStatus.textContent = 'Chưa đồng bộ';
+    DOM.trelloAttachmentsList.innerHTML = '<p style="font-size:0.8em; opacity:0.5; color:var(--accent-color);">Vui lòng nhấn Lưu để đồng bộ Trello trước khi đính kèm tệp.</p>';
+    
     openModal(DOM.modalTask);
 }
 
@@ -2346,6 +2639,22 @@ window.openEditTask = function(id) {
 
     const header = document.getElementById('modal-task-header');
     if (header) header.textContent = 'Sửa Công Việc';
+    
+    // Setup Trello & Preview UI
+    DOM.taskDescPreview.classList.add('hidden');
+    DOM.taskDescInput.classList.remove('hidden');
+    DOM.btnTogglePreview.textContent = '👁 Preview';
+    
+    if (task.trelloCardId) {
+        DOM.trelloSection.classList.remove('hidden');
+        DOM.trelloCardStatus.textContent = 'Đã đồng bộ';
+        loadTrelloAttachments(task.id, false);
+    } else {
+        DOM.trelloSection.classList.remove('hidden');
+        DOM.trelloCardStatus.textContent = 'Chưa đồng bộ';
+        DOM.trelloAttachmentsList.innerHTML = '<p style="font-size:0.8em; opacity:0.5; color:var(--accent-color);">Nhấn Lưu để đồng bộ với Trello</p>';
+    }
+
     openModal(DOM.modalTask);
 };
 
@@ -2382,11 +2691,21 @@ async function handleSaveTask() {
     
     try {
         const payload = { title, description, date, userId };
+        let taskId = id;
         if (id) {
             await API.updateScheduleTask(id, payload);
         } else {
-            await API.addScheduleTask(title, description, date, userId);
+            const res = await API.addScheduleTask(title, description, date, userId);
+            taskId = res.id;
         }
+
+        // Sync with Trello
+        try {
+            await API.syncTrelloCard(taskId);
+        } catch (trelloErr) {
+            console.warn('Trello sync failed, but task was saved:', trelloErr);
+        }
+
         await loadScheduleData();
         closeAllModals();
         renderSchedule();

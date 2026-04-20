@@ -9,6 +9,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="icon" type="image/png" href="favicon.png">
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 <body>
     <!-- ==== MÀN HÌNH ĐĂNG NHẬP ==== -->
@@ -75,8 +76,8 @@
                     </nav>
                 </div>
 
-                <!-- SECTION: ADMIN -->
-                <div id="admin-menu" class="menu-box hidden">
+                <!-- Categories Management -->
+               <div id="admin-menu" class="menu-box hidden">
                     <h4 class="section-title">CÀI ĐẶT</h4>
                     <nav class="nav-tabs vertical">
                         <button class="nav-tab" data-tab="settings-tab" id="nav-settings">
@@ -187,6 +188,7 @@
                     <div class="settings-subtabs glass-panel">
                         <button class="settings-subtab active" data-subtab="accounts-panel">👥 Account</button>
                         <button class="settings-subtab" data-subtab="merchants-panel">🏪 Merchant</button>
+                        <button class="settings-subtab" data-subtab="fulfillments-panel">📦 Fulfillment</button>
                         <button class="settings-subtab" data-subtab="categories-panel">🏷️ Category</button>
                     </div>
 
@@ -242,6 +244,32 @@
                         </div>
                     </div>
 
+                    <!-- PANEL: FULFILLMENTS -->
+                    <div id="fulfillments-panel" class="settings-panel">
+                        <div class="add-link-section glass-panel">
+                            <h3>📦 Quản Lý Fulfillment</h3>
+                            <form id="add-fulfillment-form">
+                                <div class="form-row">
+                                    <div class="input-group flex-2">
+                                        <label>Tên Fulfillment mới</label>
+                                        <input type="text" id="new-fulfillment-name" placeholder="VD: Gearment, CustomCat..." required>
+                                    </div>
+                                    <div class="form-actions" style="margin-top: 0;">
+                                        <button type="submit" class="btn-primary">Thêm Fulfillment</button>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
+                        <div class="links-display-section glass-panel">
+                            <div class="table-container">
+                                <table class="modern-table">
+                                    <thead><tr><th>Tên Fulfillment</th><th style="width: 120px;">Hành Động</th></tr></thead>
+                                    <tbody id="fulfillments-table-body"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- PANEL: CATEGORIES -->
                     <div id="categories-panel" class="settings-panel">
                         <div class="add-link-section glass-panel">
@@ -292,7 +320,9 @@
                                 </div>
                                 <div class="input-group" style="flex: 1; min-width: 150px;">
                                     <label>📦 Fulfillment <span style="color:#ef4444;">*</span></label>
-                                    <input type="text" id="sales-fulfillment" placeholder="VD: FBA, FBM..." required>
+                                    <select id="sales-fulfillment" required>
+                                        <option value="">-- Chọn Fulfillment --</option>
+                                    </select>
                                 </div>
                                 <div class="input-group" style="flex: 1; min-width: 150px;">
                                     <label>🎨 Mã Design <span style="color:#ef4444;">*</span></label>
@@ -479,6 +509,9 @@
             <!-- ===== TAB: WORK SCHEDULE ===== -->
             <div id="schedule-tab" class="tab-content">
                 <div class="content-wrapper">
+                    <!-- Notifications Bar for Today and Tomorrow -->
+                    <div id="schedule-notifications-bar" class="hidden"></div>
+
                     <div class="calendar-wrapper">
                         <div class="calendar-container glass-panel">
                             <div class="calendar-controls">
@@ -786,8 +819,38 @@
                 <input type="text" id="task-title-input" required placeholder="Nhập tên việc cần làm...">
             </div>
             <div class="input-group">
-                <label>Mô tả chi tiết</label>
-                <textarea id="task-desc-input" rows="3" placeholder="Ghi chú thêm (nếu có)..."></textarea>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+                    <label style="margin:0;">Mô tả chi tiết (Hỗ trợ Markdown)</label>
+                    <button type="button" id="btn-toggle-preview" class="btn-text" style="font-size:0.8em; color:var(--accent-color);">👁 Preview</button>
+                </div>
+                <div id="task-desc-container">
+                    <textarea id="task-desc-input" rows="5" placeholder="Ghi chú thêm (Hỗ trợ markdown như Trello)..."></textarea>
+                    <div id="task-desc-preview" class="markdown-body hidden" style="background:rgba(0,0,0,0.2); padding:15px; border-radius:8px; min-height:120px; overflow-y:auto; border:1px solid var(--panel-border);"></div>
+                </div>
+            </div>
+
+            <div id="trello-section" class="hidden" style="margin-top:15px; padding:15px; border-radius:12px; background:rgba(0,0,0,0.15); border:1px solid var(--panel-border);">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                    <h4 style="margin:0; font-size:0.9em; display:flex; align-items:center; gap:8px;">
+                        <span style="color:#0079bf;">Trello</span> Attachments
+                    </h4>
+                    <span id="trello-card-status" style="font-size:0.75em; opacity:0.6;">Chưa đồng bộ</span>
+                </div>
+                
+                <div id="trello-attachments-list" style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px;"></div>
+
+                <div class="file-upload-wrapper">
+                    <input type="file" id="trello-file-input" class="hidden">
+                    <button type="button" id="btn-trigger-upload" class="btn-secondary" style="width:100%; border-style:dashed; border-color:var(--accent-color); color:var(--accent-color);">
+                        📎 Đính kèm tệp lên Trello
+                    </button>
+                    <div id="upload-progress" class="hidden" style="margin-top:8px;">
+                        <div style="height:4px; background:rgba(255,255,255,0.1); border-radius:2px; overflow:hidden;">
+                            <div id="progress-bar" style="width:0; height:100%; background:var(--accent-color); transition:width 0.3s;"></div>
+                        </div>
+                        <span style="font-size:0.7em; opacity:0.6; margin-top:4px; display:block;">Đang tải lên...</span>
+                    </div>
+                </div>
             </div>
             <div class="modal-actions">
                 <button type="button" class="btn-secondary btn-close-modal">Hủy</button>
@@ -795,7 +858,7 @@
             </div>
         </div>
 
-        <div id="modal-task-detail" class="modal glass-panel hidden" style="width: 800px; max-width: 95vw;">
+        <div id="modal-task-detail" class="modal glass-panel hidden" style="width: 600px; max-width: 90vw; padding: 30px; animation: slideIn 0.3s; position: relative; max-height: 90vh; overflow-y: auto;">
             <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:20px; border-bottom: 1px solid var(--panel-border); padding-bottom: 15px;">
                 <div>
                     <h3 id="detail-task-title" style="margin-bottom: 5px; border:none; padding:0;">Tiêu đề công việc</h3>
@@ -818,7 +881,11 @@
                 </div>
                 <div class="detail-row">
                     <label style="display:block; font-size: 0.75em; color: var(--text-secondary); margin-bottom: 5px; text-transform: uppercase;">Mô tả nội dung</label>
-                    <div id="detail-task-desc" style="background: rgba(0,0,0,0.2); padding: 15px; border-radius: 8px; line-height: 1.6; white-space: pre-wrap;">---</div>
+                    <div id="detail-task-desc" class="markdown-body" style="background: rgba(0,0,0,0.2); padding: 15px; border-radius: 8px; line-height: 1.6; max-height: 350px; overflow-y: auto;">---</div>
+                </div>
+                <div id="detail-trello-section" class="hidden">
+                    <label style="display:block; font-size: 0.75em; color: var(--text-secondary); margin-bottom: 8px; text-transform: uppercase;">Tệp đính kèm (Trello)</label>
+                    <div id="detail-trello-attachments" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap:10px;"></div>
                 </div>
             </div>
             <div class="modal-actions" style="margin-top: 30px;">

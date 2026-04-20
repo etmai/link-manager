@@ -128,6 +128,10 @@ async function initDb() {
             id TEXT PRIMARY KEY,
             name TEXT UNIQUE NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS fulfillments (
+            id TEXT PRIMARY KEY,
+            name TEXT UNIQUE NOT NULL
+        );
         CREATE TABLE IF NOT EXISTS work_schedule (
             id TEXT PRIMARY KEY,
             title TEXT NOT NULL,
@@ -136,6 +140,7 @@ async function initDb() {
             userId TEXT NOT NULL,
             status TEXT NOT NULL DEFAULT 'pending',
             createdBy TEXT,
+            creatorRole TEXT DEFAULT 'user',
             createdAt TEXT NOT NULL
         );
         CREATE TABLE IF NOT EXISTS sample_requests (
@@ -177,6 +182,18 @@ async function initDb() {
     const scheduleColNames = scheduleCols.map(c => c.name);
     if (!scheduleColNames.includes('createdBy')) {
         await db.run("ALTER TABLE work_schedule ADD COLUMN createdBy TEXT");
+    }
+    if (!scheduleColNames.includes('trelloCardId')) {
+        await db.run("ALTER TABLE work_schedule ADD COLUMN trelloCardId TEXT");
+    }
+    if (!scheduleColNames.includes('creatorRole')) {
+        await db.run("ALTER TABLE work_schedule ADD COLUMN creatorRole TEXT DEFAULT 'admin'");
+        // Update existing rows creatorRole if possible
+        await db.run(`
+            UPDATE work_schedule 
+            SET creatorRole = (SELECT role FROM users WHERE username = work_schedule.createdBy)
+            WHERE EXISTS (SELECT 1 FROM users WHERE username = work_schedule.createdBy)
+        `);
     }
 
     // Migration for sales_entries — ensure all required columns exist
@@ -238,6 +255,16 @@ async function initDb() {
         for (const m of defaults) {
             const id = randomUUID();
             await db.run('INSERT INTO merchants (id, name) VALUES (?, ?)', [id, m]);
+        }
+    }
+
+    // Default fulfillments
+    const countFulfillments = await db.get('SELECT COUNT(*) as count FROM fulfillments');
+    if (countFulfillments.count === 0) {
+        const defaults = ["Gearment", "CustomCat", "Printful", "Printify", "Khác"];
+        for (const f of defaults) {
+            const id = randomUUID();
+            await db.run('INSERT INTO fulfillments (id, name) VALUES (?, ?)', [id, f]);
         }
     }
     console.log('SQL Database initialized successfully.');
@@ -768,6 +795,38 @@ app.put('/api/merchants/:id', authenticateToken, requireAdmin, async (req, res) 
     } catch (err) { res.status(400).json({ error: 'Tên merchant đã tồn tại hoặc lỗi!' }); }
 });
 
+// =========== FULFILLMENTS CRUD ===========
+app.get('/api/fulfillments', authenticateToken, async (req, res) => {
+    const rows = await db.all('SELECT * FROM fulfillments ORDER BY name ASC');
+    res.json(rows);
+});
+
+app.post('/api/fulfillments', authenticateToken, requireAdmin, async (req, res) => {
+    const { name } = req.body;
+    if (!name) return res.status(400).json({ error: 'Tên fulfillment không được để trống!' });
+    const id = randomUUID();
+    try {
+        await db.run('INSERT INTO fulfillments (id, name) VALUES (?, ?)', [id, name.trim()]);
+        res.json({ success: true, id });
+    } catch (err) { res.status(400).json({ error: 'Tên fulfillment đã tồn tại!' }); }
+});
+
+app.delete('/api/fulfillments/:id', authenticateToken, requireAdmin, async (req, res) => {
+    const { id } = req.params;
+    await db.run('DELETE FROM fulfillments WHERE id = ?', [id]);
+    res.json({ success: true });
+});
+
+app.put('/api/fulfillments/:id', authenticateToken, requireAdmin, async (req, res) => {
+    const { id } = req.params;
+    const { name } = req.body;
+    if (!name) return res.status(400).json({ error: 'Tên fulfillment không được để trống!' });
+    try {
+        await db.run('UPDATE fulfillments SET name = ? WHERE id = ?', [name.trim(), id]);
+        res.json({ success: true });
+    } catch (err) { res.status(400).json({ error: 'Tên fulfillment đã tồn tại hoặc lỗi!' }); }
+});
+
 // =========== WORK SCHEDULE CRUD ===========
 app.get('/api/schedule', authenticateToken, async (req, res) => {
     const { user } = req.query;
@@ -802,8 +861,8 @@ app.post('/api/schedule', authenticateToken, async (req, res) => {
 
     const id = randomUUID();
     await db.run(
-        'INSERT INTO work_schedule (id, title, description, date, userId, status, createdBy, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-        [id, title.trim(), description || '', date, targetUser, 'pending', req.user.username, new Date().toISOString()]
+        'INSERT INTO work_schedule (id, title, description, date, userId, status, createdBy, creatorRole, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [id, title.trim(), description || '', date, targetUser, 'pending', req.user.username, req.user.role, new Date().toISOString()]
     );
     res.json({ success: true, id });
 });
@@ -841,6 +900,11 @@ app.delete('/api/schedule/:id', authenticateToken, async (req, res) => {
     // Permission check: owner or admin
     if (entry.userId !== req.user.username && req.user.role !== 'admin') {
         return res.status(403).json({ error: 'Bạn không có quyền xóa công việc này!' });
+    }
+
+    // New permission check: User cannot delete Admin-created tasks
+    if (req.user.role === 'user' && entry.creatorRole === 'admin') {
+        return res.status(403).json({ error: 'Bạn không thể xóa công việc được tạo bởi Admin!' });
     }
 
     await db.run('DELETE FROM work_schedule WHERE id = ?', [id]);
@@ -1025,6 +1089,112 @@ async function cleanupExpiredSamples() {
         console.error('Cleanup expired samples failed:', error);
     }
 }
+
+// =========== TRELLO INTEGRATION ===========
+app.post('/api/trello/sync/:taskId', authenticateToken, async (req, res) => {
+    const { taskId } = req.params;
+    const task = await db.get('SELECT * FROM work_schedule WHERE id = ?', [taskId]);
+    if (!task) return res.status(404).json({ error: 'Không tìm thấy công việc!' });
+
+    const key = process.env.TRELLO_API_KEY;
+    const token = process.env.TRELLO_TOKEN;
+    const listId = '69e531239660a96cc9e9a0e6'; // Dinoz-App list
+
+    try {
+        let cardId = task.trelloCardId;
+        let response;
+
+        if (cardId) {
+            // Update existing card
+            response = await fetch(`https://api.trello.com/1/cards/${cardId}?key=${key}&token=${token}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name: task.title,
+                    desc: task.description
+                })
+            });
+        } else {
+            // Create new card
+            response = await fetch(`https://api.trello.com/1/cards?idList=${listId}&key=${key}&token=${token}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name: task.title,
+                    desc: task.description,
+                    pos: 'top'
+                })
+            });
+            const data = await response.json();
+            cardId = data.id;
+            await db.run('UPDATE work_schedule SET trelloCardId = ? WHERE id = ?', [cardId, taskId]);
+        }
+
+        if (!response.ok) {
+            const errData = await response.json();
+            throw new Error(errData.message || 'Trello API error');
+        }
+
+        res.json({ success: true, trelloCardId: cardId });
+    } catch (error) {
+        console.error('Trello sync failed:', error);
+        res.status(500).json({ error: 'Không thể đồng bộ với Trello: ' + error.message });
+    }
+});
+
+const multer = require('multer');
+const upload = multer({ storage: multer.memoryStorage() });
+
+app.post('/api/trello/upload/:taskId', authenticateToken, upload.single('file'), async (req, res) => {
+    const { taskId } = req.params;
+    const task = await db.get('SELECT * FROM work_schedule WHERE id = ?', [taskId]);
+    if (!task || !task.trelloCardId) return res.status(400).json({ error: 'Công việc chưa được đồng bộ với Trello!' });
+
+    if (!req.file) return res.status(400).json({ error: 'Không có tệp nào được tải lên!' });
+
+    const key = process.env.TRELLO_API_KEY;
+    const token = process.env.TRELLO_TOKEN;
+    const cardId = task.trelloCardId;
+
+    try {
+        const formData = new FormData();
+        const blob = new Blob([req.file.buffer], { type: req.file.mimetype });
+        formData.append('file', blob, req.file.originalname);
+
+        const response = await fetch(`https://api.trello.com/1/cards/${cardId}/attachments?key=${key}&token=${token}`, {
+            method: 'POST',
+            body: formData
+        });
+
+        if (!response.ok) {
+            const errData = await response.json();
+            throw new Error(errData.message || 'Trello upload error');
+        }
+
+        const data = await response.json();
+        res.json({ success: true, attachment: data });
+    } catch (error) {
+        console.error('Trello upload failed:', error);
+        res.status(500).json({ error: 'Không thể tải tệp lên Trello: ' + error.message });
+    }
+});
+
+app.get('/api/trello/attachments/:taskId', authenticateToken, async (req, res) => {
+    const { taskId } = req.params;
+    const task = await db.get('SELECT * FROM work_schedule WHERE id = ?', [taskId]);
+    if (!task || !task.trelloCardId) return res.json([]);
+
+    const key = process.env.TRELLO_API_KEY;
+    const token = process.env.TRELLO_TOKEN;
+
+    try {
+        const response = await fetch(`https://api.trello.com/1/cards/${task.trelloCardId}/attachments?key=${key}&token=${token}`);
+        const data = await response.json();
+        res.json(data);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
 
 initDb().then(() => {
     // Run cleanup on startup
