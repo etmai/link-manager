@@ -1196,6 +1196,34 @@ app.get('/api/trello/attachments/:taskId', authenticateToken, async (req, res) =
     }
 });
 
+app.delete('/api/trello/attachments/:taskId/:attachmentId', authenticateToken, async (req, res) => {
+    const { taskId, attachmentId } = req.params;
+    
+    try {
+        const task = await db.get('SELECT trelloCardId FROM work_schedule WHERE id = ?', [taskId]);
+        if (!task || !task.trelloCardId) {
+            return res.status(404).json({ error: 'Không tìm thấy công việc hoặc thẻ Trello tương ứng.' });
+        }
+
+        const key = process.env.TRELLO_API_KEY;
+        const token = process.env.TRELLO_TOKEN;
+
+        const response = await fetch(`https://api.trello.com/1/cards/${task.trelloCardId}/attachments/${attachmentId}?key=${key}&token=${token}`, {
+            method: 'DELETE'
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.message || 'Trello delete failed');
+        }
+
+        res.json({ success: true, message: 'Đã xóa tệp đính kèm trên Trello thành công' });
+    } catch (error) {
+        console.error('Trello attachment delete failed:', error);
+        res.status(500).json({ error: 'Không thể xóa tệp trên Trello: ' + error.message });
+    }
+});
+
 initDb().then(() => {
     // Run cleanup on startup
     cleanupExpiredSamples();

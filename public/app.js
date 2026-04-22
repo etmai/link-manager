@@ -168,7 +168,8 @@ const API = {
         }
         return res.json();
     },
-    async getTrelloAttachments(taskId) { return API.fetch(`/api/trello/attachments/${taskId}`); }
+    async getTrelloAttachments(taskId) { return API.fetch(`/api/trello/attachments/${taskId}`); },
+    async deleteTrelloAttachment(taskId, attachmentId) { return API.fetch(`/api/trello/attachments/${taskId}/${attachmentId}`, { method: 'DELETE' }); }
 };
 
 // ====== APP STATE ======
@@ -671,12 +672,48 @@ function setupEventListeners() {
     // ---- CONFIRM DELETE MODAL ----
     DOM.btnConfirmDelete?.addEventListener('click', async () => {
         const id = DOM.confirmDeleteId.value;
+        const type = document.getElementById('confirm-delete-type')?.value;
         if (!id) return;
+        
         try {
-            await API.deleteSample(id);
-            cachedSamples = (await API.getSamples()) || [];
+            if (type === 'sample' || !type) {
+                await API.deleteSample(id);
+                cachedSamples = (await API.getSamples()) || [];
+                renderSamplesTable();
+            } else if (type === 'user') {
+                await API.deleteUser(id);
+                cachedUsers = await API.getUsers();
+                populateAdminControls();
+                await renderUsersTable();
+            } else if (type === 'link') {
+                await API.deleteLink(id);
+                cachedLinks = await API.getLinks();
+                renderAppContent();
+            } else if (type === 'task') {
+                await API.deleteScheduleTask(id);
+                await loadScheduleData();
+                renderSchedule();
+            } else if (type === 'finance') {
+                await API.deleteFinance(id);
+                cachedFinance = await API.getFinance();
+                finPopulateMonthFilter();
+                renderFinanceMonthlySummary();
+                renderFinanceTable();
+            } else if (type === 'sales') {
+                await SalesAPI.delete(id);
+                cachedSales = await SalesAPI.getAll();
+                renderSalesTable();
+                renderStatistics();
+                updateTopbar('sales-tab');
+                const msgEl = document.getElementById('sales-form-msg');
+                if (msgEl) {
+                    msgEl.textContent = '✅ Đã xóa bản ghi thành công!';
+                    setTimeout(() => { msgEl.textContent = ''; }, 3000);
+                }
+            } else if (['account', 'merchant', 'fulfillment', 'category'].includes(type)) {
+                await confirmUniversalDelete();
+            }
             closeAllModals();
-            renderSamplesTable();
         } catch (err) { showError(err.message); }
     });
 
@@ -841,6 +878,7 @@ function setupEventListeners() {
         const btn = target.closest('button');
         if (!btn) return;
         const id = btn.getAttribute('data-id');
+        const action = btn.getAttribute('data-action');
 
         // 2. TAB: SALES (Sửa/Xóa)
         if (btn.classList.contains('btn-edit-sales')) {
@@ -854,34 +892,34 @@ function setupEventListeners() {
         // 3. TAB: LINKS (Sửa/Xóa)
         if (btn.classList.contains('btn-edit-link')) {
             if (id) window.openEditLink(id);
+            return;
         } else if (btn.classList.contains('btn-delete-link')) {
             if (id) window.handleDeleteLink(id);
+            return;
         }
 
         // 4. TAB: SAMPLES (Add/Sửa/Xóa)
-        else if (btn.classList.contains('btn-add-link') || btn.classList.contains('btn-edit-sample')) {
+        if (btn.classList.contains('btn-add-link') || btn.classList.contains('btn-edit-sample')) {
             const link = btn.getAttribute('data-link') || 'N/A';
             if (id) window.handleEditSampleLink(id, link);
+            return;
         } else if (btn.classList.contains('btn-delete-sample')) {
             if (id) window.handleDeleteSample(id);
+            return;
         }
 
         // 5. TAB: USERS (Admin only)
-        else if (btn.classList.contains('btn-edit-user')) {
+        if (btn.classList.contains('btn-edit-user')) {
             const username = btn.getAttribute('data-username');
             if (username) window.handleEditUser(username);
+            return;
         } else if (btn.classList.contains('btn-delete-user')) {
             const username = btn.getAttribute('data-username');
             if (username) window.handleDeleteUser(username);
+            return;
         }
 
-        const taskBtn = target.closest('.btn-icon');
-        if (taskBtn && (taskBtn.closest('.day-tasks') || taskBtn.closest('.task-actions'))) {
-            const taskId = taskBtn.dataset.id;
-            const action = taskBtn.dataset.action;
-            if (action === 'edit') window.openEditTask(taskId);
-            if (action === 'delete') window.handleDeleteTask(taskId);
-        }
+        // 6. TAB: LỊCH CÔNG VIỆC (TASK ACTIONS) - Handled via inline onclick
     });
 
     document.addEventListener('submit', async (e) => {
@@ -988,13 +1026,16 @@ async function loadTrelloAttachments(taskId, isDetail = false) {
             if (isDetail) DOM.detailTrelloSection.classList.remove('hidden');
             
             container.innerHTML = attachments.map(att => `
-                <a href="${att.url}" target="_blank" class="trello-attachment-card">
-                    <span class="trello-attachment-icon">📄</span>
-                    <div class="trello-attachment-info">
-                        <span class="trello-attachment-name" title="${att.name}">${att.name}</span>
-                        <span class="trello-attachment-date">${new Date(att.date).toLocaleDateString()}</span>
-                    </div>
-                </a>
+                <div class="trello-attachment-card-wrap">
+                    <a href="${att.url}" target="_blank" class="trello-attachment-card">
+                        <span class="trello-attachment-icon">📄</span>
+                        <div class="trello-attachment-info">
+                            <span class="trello-attachment-name" title="${att.name}">${att.name}</span>
+                            <span class="trello-attachment-date">${new Date(att.date).toLocaleDateString()}</span>
+                        </div>
+                    </a>
+                    ${!isDetail ? `<button class="btn-delete-attachment" onclick="window.handleDeleteTrelloAttachment(event, '${taskId}', '${att.id}')" title="Xóa tệp đính kèm">✕</button>` : ''}
+                </div>
             `).join('');
         } else {
             container.innerHTML = isDetail ? '' : '<p style="font-size:0.8em; opacity:0.5;">Chưa có tệp đính kèm nào.</p>';
@@ -1004,6 +1045,24 @@ async function loadTrelloAttachments(taskId, isDetail = false) {
         console.error('Failed to load Trello attachments:', err);
     }
 }
+
+window.handleDeleteTrelloAttachment = async function(event, taskId, attachmentId) {
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
+    
+    if (!confirm('Bạn có chắc chắn muốn xóa tệp đính kèm này khỏi Trello không?')) return;
+    
+    try {
+        const res = await API.deleteTrelloAttachment(taskId, attachmentId);
+        showSuccess(res.message || 'Đã xóa tệp đính kèm trên Trello');
+        // Reload list
+        await loadTrelloAttachments(taskId, false);
+    } catch (err) {
+        showError(err.message);
+    }
+};
 
 // ====== LOGIC: USERS ======
 async function renderUsersTable() {
@@ -1061,13 +1120,7 @@ window.cancelUserEdit = function() {
 window.handleDeleteUser = async function(username) {
     const currentUser = getCurrentUser();
     if (username === currentUser.username) { showError('Không thể xóa bản thân!'); return; }
-    if (!confirm(`Xóa user: ${username}?`)) return;
-    try {
-        await API.deleteUser(username);
-        cachedUsers = await API.getUsers();
-        populateAdminControls();
-        await renderUsersTable();
-    } catch (err) { showError(err.message); }
+    window.openDeleteModal('user', username, username);
 };
 
 window.handleResetUserPassword = function(username) {
@@ -1427,7 +1480,7 @@ function renderLinks() {
         const canEdit = currentUser && (currentUser.role === 'admin' || l.addedBy === currentUser.username);
         const actionButtons = canEdit ? `
             <button class="btn-small btn-edit btn-edit-link" data-id="${l.id}">Sửa</button>
-            <button class="btn-small btn-danger btn-delete-link" data-id="${l.id}">Xoá</button>
+            <button class="btn-small btn-danger btn-delete-link" data-id="${l.id}">Xóa</button>
         ` : `<span style="color:gray; font-size:0.8em;">N/A</span>`;
 
         tr.innerHTML = `
@@ -1453,12 +1506,9 @@ function renderLinks() {
 
 // ====== LOGIC: EDIT & DELETE LINK ======
 window.handleDeleteLink = async function(id) {
-    if (!confirm('Bạn chắc chắn xoá link vĩnh viễn?')) return;
-    try {
-        await API.deleteLink(id);
-        cachedLinks = await API.getLinks();
-        renderAppContent();
-    } catch (err) { showError(err.message); }
+    const l = cachedLinks.find(x => String(x.id) === String(id));
+    const name = l ? l.originalUrl : id;
+    window.openDeleteModal('link', id, name);
 };
 
 window.openEditLink = function(id) {
@@ -1799,8 +1849,10 @@ function renderSalesTable() {
             </td>
         ` : `<td style="color:var(--text-secondary)">—</td>`;
     };
+    const todayStr = new Date().toISOString().split('T')[0];
     data.forEach(s => {
         const tr = document.createElement('tr');
+        if (s.date === todayStr) tr.classList.add('row-today');
         const actions = isAdmin ? `
             <button class="btn-small btn-edit btn-edit-sales" data-id="${s.id}">Sửa</button>
             <button class="btn-small btn-danger btn-delete-sales" data-id="${s.id}">Xóa</button>
@@ -1844,7 +1896,7 @@ function renderSalesTable() {
 
 // ====== SALES: EDIT ======
 window.openEditSales = function(id) {
-    const entry = cachedSales.find(s => s.id === id);
+    const entry = cachedSales.find(s => String(s.id) === String(id));
     if (!entry) return;
 
     document.getElementById('edit-sales-id-inline').value = entry.id;
@@ -1876,39 +1928,9 @@ window.openEditSales = function(id) {
 let _pendingSalesDeleteId = null;
 
 window.handleDeleteSales = function(id) {
-    _pendingSalesDeleteId = id;
-    const entry = cachedSales.find(s => s.id === id);
-    const label = entry ? `bản ghi SKU "${entry.sku}" (${entry.date})` : 'bản ghi này';
-    DOM.confirmDeleteMsg.textContent = `Bạn có chắc muốn xóa ${label}? Hành động này không thể hoàn tác.`;
-    // Override confirm button to handle sales delete
-    const btnConfirm = DOM.btnConfirmDelete;
-    const handler = async () => {
-        if (!_pendingSalesDeleteId) return;
-        try {
-            await SalesAPI.delete(_pendingSalesDeleteId);
-            _pendingSalesDeleteId = null;
-            cachedSales = await SalesAPI.getAll();
-            closeAllModals();
-            renderSalesTable();
-            renderStatistics();
-            updateTopbar('sales-tab');
-            // Show success feedback
-            const msgEl = document.getElementById('sales-form-msg');
-            if (msgEl) {
-                msgEl.textContent = '✅ Đã xóa bản ghi thành công!';
-                setTimeout(() => { msgEl.textContent = ''; }, 3000);
-            }
-        } catch (err) {
-            showError(err.message);
-        }
-        btnConfirm.removeEventListener('click', handler);
-    };
-    // Remove old listeners by cloning
-    const newBtn = btnConfirm.cloneNode(true);
-    btnConfirm.parentNode.replaceChild(newBtn, btnConfirm);
-    DOM.btnConfirmDelete = newBtn;
-    newBtn.addEventListener('click', handler);
-    openModal(DOM.modalConfirmDelete);
+    const entry = cachedSales.find(s => String(s.id) === String(id));
+    const name = entry ? `SKU "${entry.sku}" (${entry.date})` : id;
+    window.openDeleteModal('sales', id, name);
 };
 
 // ====== STATISTICS ======
@@ -2536,8 +2558,8 @@ function renderDayTasks() {
                 </span>
                 <div class="task-actions">
                     ${t.trelloCardId ? '<span title="Đã đồng bộ Trello" style="font-size:0.8em; margin-right:8px; filter:grayscale(1) brightness(2);">🔗</span>' : ''}
-                    ${canEdit ? `<button class="btn-icon" data-id="${t.id}" data-action="edit" title="Sửa" style="font-size: 0.9em; padding: 4px;">✏️</button>` : ''}
-                    ${canDelete ? `<button class="btn-icon" data-id="${t.id}" data-action="delete" title="Xóa" style="font-size: 0.9em; padding: 4px; color: var(--danger-color);">🗑️</button>` : ''}
+                    ${canEdit ? `<button class="btn-small btn-edit" onclick="event.stopPropagation(); window.openEditTask('${t.id}')">Sửa</button>` : ''}
+                    ${canDelete ? `<button class="btn-small btn-danger" onclick="event.stopPropagation(); window.handleDeleteTask('${t.id}')">Xóa</button>` : ''}
                 </div>
             </div>
             <p class="task-item-desc">${t.description ? t.description.substring(0, 100) + (t.description.length > 100 ? '...' : '') : 'Không có mô tả'}</p>
@@ -2553,7 +2575,7 @@ function renderDayTasks() {
 }
 
 window.openTaskDetail = function(id) {
-    const task = cachedSchedule.find(t => t.id === id);
+    const task = cachedSchedule.find(t => String(t.id) === String(id));
     if (!task) return;
     
     const user = getCurrentUser();
@@ -2650,7 +2672,7 @@ function openAddTaskModal() {
 }
 
 window.openEditTask = function(id) {
-    const task = cachedSchedule.find(t => t.id === id);
+    const task = cachedSchedule.find(t => String(t.id) === String(id));
     if (!task) return;
     
     const user = getCurrentUser();
@@ -2688,12 +2710,9 @@ window.openEditTask = function(id) {
 };
 
 window.handleDeleteTask = async function(id) {
-    if (!confirm('Xóa công việc này?')) return;
-    try {
-        await API.deleteScheduleTask(id);
-        await loadScheduleData();
-        renderSchedule();
-    } catch (err) { showError(err.message); }
+    const t = cachedSchedule.find(x => String(x.id) === String(id));
+    const name = t ? t.title : id;
+    window.openDeleteModal('task', id, name);
 };
 
 window.handleToggleTaskStatus = async function(id, isCompleted) {
@@ -2827,11 +2846,9 @@ window.handleEditSampleLink = function(id, currentLink) {
 };
 
 window.handleDeleteSample = function(id) {
-    const sample = cachedSamples.find(s => s.id === id);
-    const label = sample ? `mẫu "${sample.designId}"` : 'yêu cầu này';
-    DOM.confirmDeleteId.value = id;
-    DOM.confirmDeleteMsg.textContent = `Bạn có chắc muốn xóa ${label}? Hành động này không thể hoàn tác.`;
-    openModal(DOM.modalConfirmDelete);
+    const sample = cachedSamples.find(s => String(s.id) === String(id));
+    const name = sample ? sample.designId : id;
+    window.openDeleteModal('sample', id, name);
 };
 
 // Start app
@@ -3017,8 +3034,8 @@ function renderFinanceTable() {
         const profit = (parseFloat(e.payment) || 0) - (parseFloat(e.fulfillment_cost) || 0) - (parseFloat(e.other_cost) || 0);
         const adminActions = isAdmin ? `
             <td class="finance-admin-col" style="text-align:center; white-space:nowrap;">
-                <button class="btn-icon-sm" onclick="finStartEdit('${e.id}')" title="Sửa" style="margin-right:4px;">✏️</button>
-                <button class="btn-icon-sm btn-danger-sm" onclick="finDeleteEntry('${e.id}')" title="Xóa">🗑️</button>
+                <button class="btn-small btn-edit" onclick="finStartEdit('${e.id}')" style="margin-right:4px;">Sửa</button>
+                <button class="btn-small btn-danger" onclick="finDeleteEntry('${e.id}')">Xóa</button>
             </td>` : `<td class="finance-admin-col hidden"></td>`;
 
         return `<tr>
@@ -3116,15 +3133,8 @@ function finCancelEdit() {
 }
 
 async function finDeleteEntry(id) {
-    if (!confirm('Xác nhận xóa bản ghi này?')) return;
-    try {
-        await API.deleteFinance(id);
-        cachedFinance = await API.getFinance();
-        finPopulateMonthFilter();
-        renderFinanceMonthlySummary();
-        renderFinanceTable();
-    } catch (err) {
-        alert('Lỗi xóa: ' + err.message);
-    }
+    const e = cachedFinance.find(x => String(x.id) === String(id));
+    const name = e ? `ngày ${e.date}` : id;
+    window.openDeleteModal('finance', id, name);
 }
 
