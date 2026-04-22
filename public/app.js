@@ -2036,9 +2036,15 @@ function renderTopProducts(tbodyId, data) {
 
         const tr = document.createElement('tr');
         tr.innerHTML = `
-            <td class="col-sku"><span class="sku-tag">${p.sku}</span></td>
-            <td class="col-title" title="${p.title}">${p.title}</td>
-            <td class="col-design" title="${p.design_id || 'N/A'}"><span class="tag" style="background: rgba(96,165,250,0.1); color:#60a5fa; border-color:rgba(96,165,250,0.2);">${p.design_id || 'N/A'}</span></td>
+            <td class="col-sku" style="cursor:pointer;" title="Click để copy SKU: ${p.sku}" onclick="copyToClipboard('${p.sku}', this)">
+                <span class="sku-tag">${p.sku}</span>
+            </td>
+            <td class="col-title" style="cursor:pointer;" title="Click để copy Tiêu đề: ${p.title}" onclick="copyToClipboard('${p.title.replace(/'/g, "\\'")}', this)">
+                ${p.title}
+            </td>
+            <td class="col-design" style="cursor:pointer;" title="Click để copy Design: ${p.design_id || 'N/A'}" onclick="copyToClipboard('${(p.design_id || '').replace(/'/g, "\\'")}', this)">
+                <span class="tag" style="background: rgba(96,165,250,0.1); color:#60a5fa; border-color:rgba(96,165,250,0.2);">${p.design_id || 'N/A'}</span>
+            </td>
             <td class="col-sale"><span class="units-badge">${p.total}</span></td>
             <td class="col-link">${linkHtml}</td>
         `;
