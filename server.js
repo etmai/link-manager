@@ -907,6 +907,19 @@ app.delete('/api/schedule/:id', authenticateToken, async (req, res) => {
         return res.status(403).json({ error: 'Bạn không thể xóa công việc được tạo bởi Admin!' });
     }
 
+    // Delete from Trello if synced
+    if (entry.trelloCardId) {
+        const key = process.env.TRELLO_API_KEY;
+        const token = process.env.TRELLO_TOKEN;
+        try {
+            await fetch(`https://api.trello.com/1/cards/${entry.trelloCardId}?key=${key}&token=${token}`, {
+                method: 'DELETE'
+            });
+        } catch (trelloErr) {
+            console.error('Trello card deletion failed (skipping):', trelloErr.message);
+        }
+    }
+
     await db.run('DELETE FROM work_schedule WHERE id = ?', [id]);
     res.json({ success: true });
 });

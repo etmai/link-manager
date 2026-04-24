@@ -1608,6 +1608,11 @@ function updateTopbar(tabId) {
         renderAccountsTable();
         renderMerchantsTable();
         renderCategoriesFullTable();
+    } else if (tabId === 'trending-niches-tab') {
+        titleEl.textContent = '🚀 Trending Niches';
+        statsEl.textContent = 'Trạng thái: Đang cập nhật thời gian thực';
+        statsEl.classList.remove('hidden');
+        renderTrendingNiches();
     } else if (tabId === 'sales-tab') {
         titleEl.textContent = '🛍️ Nhập Sales';
         renderSalesTable();
@@ -3144,3 +3149,64 @@ async function finDeleteEntry(id) {
     window.openDeleteModal('finance', id, name);
 }
 
+
+// ====== TRENDING NICHES LOGIC ======
+function renderTrendingNiches() {
+    const niches = [
+        { title: 'Retro Mama Floral', heat: 95, badge: 'Hot', sales: '3.2k+', competition: 'Medium' },
+        { title: 'Teacher Appreciation', heat: 88, badge: 'Trending', sales: '2.1k+', competition: 'High' },
+        { title: 'Pickleball Social Club', heat: 82, badge: 'New', sales: '1.2k+', competition: 'Low' },
+        { title: 'Mental Health Matters', heat: 75, badge: 'Stable', sales: '5.4k+', competition: 'Medium' },
+        { title: 'First Trip to Disney', heat: 70, badge: 'Hot', sales: '4.8k+', competition: 'High' },
+        { title: 'Camping Crew 2024', heat: 65, badge: 'New', sales: '600+', competition: 'Low' }
+    ];
+
+    const holidays = [
+        { name: "Mother's Day", date: "May 12", daysLeft: 20 },
+        { name: "Memorial Day", date: "May 27", daysLeft: 35 },
+        { name: "Father's Day", date: "June 16", daysLeft: 55 },
+        { name: "Independence Day", date: "July 4", daysLeft: 73 },
+        { name: "Labor Day", date: "Sep 2", daysLeft: 132 }
+    ];
+
+    const tbody = document.getElementById('trend-table-body');
+    if (tbody) {
+        tbody.innerHTML = niches.map(n => `
+            <tr>
+                <td style="font-weight: 600; color: var(--text-primary);">${n.title}</td>
+                <td style="text-align: center;">
+                    <span class="trend-badge ${n.badge === 'Hot' ? 'badge-hot' : 'badge-new'}">${n.badge}</span>
+                </td>
+                <td>
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span style="font-size: 0.85em; color: var(--text-secondary); width: 30px;">${n.heat}%</span>
+                        <div class="heat-bar-bg" style="flex: 1; margin: 0;">
+                            <div class="heat-bar-fill" style="width: ${n.heat}%"></div>
+                        </div>
+                    </div>
+                </td>
+                <td style="text-align: center; color: var(--success-color); font-weight: 500;">${n.sales}</td>
+                <td style="text-align: center; color: var(--warning-color);">${n.competition}</td>
+                <td style="text-align: right;">
+                    <button class="btn-primary btn-small" style="background: linear-gradient(135deg, #3b82f6, #a855f7); border: none; font-size: 0.8em;">💡 Ý Tưởng</button>
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    const list = document.getElementById('holiday-list');
+    if (list) {
+        list.innerHTML = holidays.map(h => `
+            <div class="holiday-item">
+                <div class="holiday-date-circle">
+                    <span class="h-day">${h.date.split(' ')[1]}</span>
+                    <span class="h-month">${h.date.split(' ')[0]}</span>
+                </div>
+                <div class="holiday-info">
+                    <div class="holiday-name">${h.name}</div>
+                    <div class="holiday-countdown">In ${h.daysLeft} days</div>
+                </div>
+            </div>
+        `).join('');
+    }
+}
