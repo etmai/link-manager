@@ -1,0 +1,15 @@
+{
+  "name": "dinoz-trends-bot",
+  "version": "1.0.0",
+  "description": "Automated trend fetcher and Telegram notifier for Dinoz.cc",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "dependencies": {
+    "node-fetch": "^2.7.0",
+    "node-cron": "^3.0.3",
+    "dotenv": "^16.4.5"
+  }
+}

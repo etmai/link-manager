@@ -1608,6 +1608,8 @@ function updateTopbar(tabId) {
         renderAccountsTable();
         renderMerchantsTable();
         renderCategoriesFullTable();
+        renderAiConfigSection();
+
     } else if (tabId === 'trending-niches-tab') {
         titleEl.textContent = '🚀 Trending Niches';
         statsEl.textContent = 'Trạng thái: Đang cập nhật thời gian thực';
@@ -3150,63 +3152,459 @@ async function finDeleteEntry(id) {
 }
 
 
+// ====== TRENDING NICHES API LAYER ======
+const TrendsAPI = {
+    async getAll()                { return API.fetch('/api/trends'); },
+    async add(keyword, category)  { return API.fetch('/api/trends', { method: 'POST', body: JSON.stringify({ keyword, category }) }); },
+    async togglePin(id)           { return API.fetch(`/api/trends/${id}/pin`, { method: 'PATCH' }); },
+    async delete(id)              { return API.fetch(`/api/trends/${id}`, { method: 'DELETE' }); },
+    async refresh()               { return renderTrendingNiches(); },
+    async getHolidays(all = false){ return API.fetch(`/api/holidays${all ? '?all=1' : ''}`); },
+    async refreshHolidays()       { return renderTrendingNiches(); },
+};
+
 // ====== TRENDING NICHES LOGIC ======
-function renderTrendingNiches() {
-    const niches = [
-        { title: 'Retro Mama Floral', heat: 95, badge: 'Hot', sales: '3.2k+', competition: 'Medium' },
-        { title: 'Teacher Appreciation', heat: 88, badge: 'Trending', sales: '2.1k+', competition: 'High' },
-        { title: 'Pickleball Social Club', heat: 82, badge: 'New', sales: '1.2k+', competition: 'Low' },
-        { title: 'Mental Health Matters', heat: 75, badge: 'Stable', sales: '5.4k+', competition: 'Medium' },
-        { title: 'First Trip to Disney', heat: 70, badge: 'Hot', sales: '4.8k+', competition: 'High' },
-        { title: 'Camping Crew 2024', heat: 65, badge: 'New', sales: '600+', competition: 'Low' }
-    ];
+const CATEGORY_ICONS = {
+    pets: '🐾', family: '👨‍👩‍👧', hobbies: '🎸', fashion: '👗',
+    seasonal: '🍂', humor: '😄', motivation: '💪', patriotic: '🇺🇸',
+    general: '✨', shopping: '🛍️', public: '📅', gift: '🎁'
+};
 
-    const holidays = [
-        { name: "Mother's Day", date: "May 12", daysLeft: 20 },
-        { name: "Memorial Day", date: "May 27", daysLeft: 35 },
-        { name: "Father's Day", date: "June 16", daysLeft: 55 },
-        { name: "Independence Day", date: "July 4", daysLeft: 73 },
-        { name: "Labor Day", date: "Sep 2", daysLeft: 132 }
-    ];
+function getHeatColor(score) {
+    if (score >= 85) return '#ef4444';
+    if (score >= 65) return '#f59e0b';
+    return '#10b981';
+}
 
-    const tbody = document.getElementById('trend-table-body');
-    if (tbody) {
-        tbody.innerHTML = niches.map(n => `
-            <tr>
-                <td style="font-weight: 600; color: var(--text-primary);">${n.title}</td>
-                <td style="text-align: center;">
-                    <span class="trend-badge ${n.badge === 'Hot' ? 'badge-hot' : 'badge-new'}">${n.badge}</span>
-                </td>
-                <td>
-                    <div style="display: flex; align-items: center; gap: 10px;">
-                        <span style="font-size: 0.85em; color: var(--text-secondary); width: 30px;">${n.heat}%</span>
-                        <div class="heat-bar-bg" style="flex: 1; margin: 0;">
-                            <div class="heat-bar-fill" style="width: ${n.heat}%"></div>
-                        </div>
-                    </div>
-                </td>
-                <td style="text-align: center; color: var(--success-color); font-weight: 500;">${n.sales}</td>
-                <td style="text-align: center; color: var(--warning-color);">${n.competition}</td>
-                <td style="text-align: right;">
-                    <button class="btn-primary btn-small" style="background: linear-gradient(135deg, #3b82f6, #a855f7); border: none; font-size: 0.8em;">💡 Ý Tưởng</button>
-                </td>
-            </tr>
-        `).join('');
+function getHeatLabel(score) {
+    if (score >= 85) return { text: '🔥 Rất Hot', cls: 'badge-hot' };
+    if (score >= 65) return { text: '📈 Trending', cls: 'badge-new' };
+    return { text: '🆕 Mới', cls: '' };
+}
+
+async function renderTrendingNiches() {
+    const currentUser = getCurrentUser();
+    const isAdmin = currentUser && currentUser.role === 'admin';
+
+    // ── Render skeleton loading state ──
+    const container = document.getElementById('trend-cards-container');
+    const holidayList = document.getElementById('holiday-list');
+    if (container) container.innerHTML = `<div style="text-align:center;padding:30px;color:var(--text-secondary);width:100%;">⏳ Đang tải dữ liệu...</div>`;
+    if (holidayList) holidayList.innerHTML = `<p style="text-align:center;opacity:0.5;font-size:0.85em;">Đang tải...</p>`;
+
+    // ── Inject Admin UI (add keyword form) ──
+    if (isAdmin) {
+        const adminPanel = document.getElementById('trends-admin-panel');
+        if (adminPanel) {
+            adminPanel.innerHTML = `
+                <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px;padding:12px 16px;background:rgba(255,255,255,0.03);border-radius:12px;border:1px solid rgba(255,255,255,0.08);">
+                    <span style="font-size:0.85em;color:var(--text-secondary);white-space:nowrap;">➕ Thêm keyword thủ công:</span>
+                    <input type="text" id="trend-kw-input" placeholder="VD: Funny Dog Mom Shirt..." style="flex:1;min-width:180px;padding:8px 12px;background:var(--input-bg);border:1px solid var(--border-color);border-radius:8px;color:var(--text-primary);font-size:0.9em;">
+                    <select id="trend-cat-select" style="padding:8px 12px;background:var(--input-bg);border:1px solid var(--border-color);border-radius:8px;color:var(--text-primary);font-size:0.9em;">
+                        <option value="">🤖 AI tự phân loại</option>
+                        <option value="pets">🐾 Pets</option>
+                        <option value="family">👨‍👩‍👧 Family</option>
+                        <option value="hobbies">🎸 Hobbies</option>
+                        <option value="fashion">👗 Fashion</option>
+                        <option value="seasonal">🍂 Seasonal</option>
+                        <option value="humor">😄 Humor</option>
+                        <option value="motivation">💪 Motivation</option>
+                        <option value="patriotic">🇺🇸 Patriotic</option>
+                        <option value="general">✨ General</option>
+                    </select>
+                    <button id="btn-add-trend-kw" class="btn-primary" style="padding:8px 16px;white-space:nowrap;">💾 Thêm</button>
+                    <button id="btn-refresh-trends" class="btn-secondary" style="padding:8px 14px;white-space:nowrap;" title="Fetch dữ liệu mới từ Google Trends">🔄 Refresh</button>
+                </div>
+            `;
+            document.getElementById('btn-add-trend-kw')?.addEventListener('click', handleAddTrendKeyword);
+            document.getElementById('trend-kw-input')?.addEventListener('keydown', e => { if (e.key === 'Enter') handleAddTrendKeyword(); });
+            document.getElementById('btn-refresh-trends')?.addEventListener('click', handleRefreshTrends);
+        }
     }
 
-    const list = document.getElementById('holiday-list');
-    if (list) {
-        list.innerHTML = holidays.map(h => `
-            <div class="holiday-item">
-                <div class="holiday-date-circle">
-                    <span class="h-day">${h.date.split(' ')[1]}</span>
-                    <span class="h-month">${h.date.split(' ')[0]}</span>
-                </div>
-                <div class="holiday-info">
-                    <div class="holiday-name">${h.name}</div>
-                    <div class="holiday-countdown">In ${h.daysLeft} days</div>
-                </div>
-            </div>
-        `).join('');
+    // ── Fetch data ──
+    try {
+        const [keywords, holidays] = await Promise.all([
+            TrendsAPI.getAll(),
+            TrendsAPI.getHolidays()
+        ]);
+
+        // ── Render Niche Cards ──
+        if (container) {
+            if (!keywords || keywords.length === 0) {
+                container.innerHTML = `<div style="text-align:center;padding:30px;color:var(--text-secondary);width:100%;">Chưa có dữ liệu trends. Nhấn 🔄 Refresh để tải từ Google Trends.</div>`;
+            } else {
+                // Update last-fetched time
+                const lastFetchEl = document.getElementById('trends-last-fetch');
+                if (lastFetchEl && keywords[0]?.fetched_at) {
+                    const d = new Date(keywords[0].fetched_at);
+                    lastFetchEl.textContent = `Cập nhật lúc: ${d.toLocaleTimeString('vi-VN')} ${d.toLocaleDateString('vi-VN')}`;
+                }
+
+                container.innerHTML = keywords.map(kw => {
+                    console.log('[DEBUG] Rendering keyword with premium class:', kw.keyword);
+                    const badge = getHeatLabel(kw.heat_score);
+                    const catIcon = CATEGORY_ICONS[kw.category] || '✨';
+                    const heatColor = getHeatColor(kw.heat_score);
+                    const pinIcon = kw.is_pinned ? '📌' : '📍';
+                    const adminCols = isAdmin ? `
+                        <div style="display:flex;gap:4px;">
+                            <button class="btn-small" onclick="handlePinTrend('${kw.id}')" title="${kw.is_pinned ? 'Bỏ ghim' : 'Ghim'}" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;padding:4px 8px;cursor:pointer;">${pinIcon}</button>
+                            <button class="btn-small btn-danger" onclick="handleDeleteTrend('${kw.id}')" style="padding:4px 8px;font-size:0.8em;">✕</button>
+                        </div>` : '';
+                    
+                    return `
+                    <div class="dinoz-premium-list-item" style="display: grid !important; grid-template-columns: 1.5fr 2fr 200px auto !important; gap: 24px !important; align-items: center !important; padding: 16px 24px !important; margin-bottom: 12px !important; border-radius: 16px !important; background: rgba(255,255,255,0.02) !important; border: 1px solid rgba(255,255,255,0.06) !important; backdrop-filter: blur(12px) !important; ${kw.is_pinned ? 'border-color: rgba(251,191,36,0.4) !important; background: rgba(251,191,36,0.04) !important;' : ''}">
+                        <div class="niche-card-header" style="display: flex !important; flex-direction: column !important; align-items: flex-start !important; gap: 8px !important;">
+                            <h4 class="niche-card-title" style="margin: 0 !important; font-size: 1.1em !important; font-weight: 700 !important; color: #f8fafc !important;">${catIcon} ${kw.keyword}</h4>
+                            <span class="niche-card-category" style="font-size: 0.75em !important; padding: 3px 10px !important; background: rgba(255,255,255,0.05) !important; border: 1px solid rgba(255,255,255,0.1) !important; border-radius: 20px !important; color: #94a3b8 !important;">${kw.category}</span>
+                        </div>
+                        <div class="niche-card-summary" style="font-size: 0.85em !important; color: #94a3b8 !important; font-style: italic !important; line-height: 1.5 !important; overflow: hidden !important; display: -webkit-box !important; -webkit-line-clamp: 3 !important; -webkit-box-orient: vertical !important;">
+                            ${kw.ai_summary || 'Chưa có phân tích AI.'}
+                        </div>
+                        <div class="heat-bar-wrapper" style="width: 100% !important;">
+                            <div class="heat-bar-header" style="display: flex !important; justify-content: space-between !important; font-size: 0.75em !important; color: #94a3b8 !important; margin-bottom: 6px !important; text-transform: uppercase !important;">
+                                <span>Heat</span>
+                                <span style="color:${heatColor} !important; font-weight: 700 !important;">${kw.heat_score}%</span>
+                            </div>
+                            <div class="heat-bar-container" style="height: 6px !important; background: rgba(0,0,0,0.4) !important; border-radius: 10px !important; overflow: hidden !important; position: relative !important;">
+                                <div class="heat-bar-fill" style="height: 100% !important; border-radius: 10px !important; background:${heatColor} !important; width: 0% !important; transition: width 1.5s ease !important;" data-target-width="${kw.heat_score}%"></div>
+                            </div>
+                        </div>
+                        <div class="niche-card-footer" style="display: flex !important; flex-direction: column !important; align-items: flex-end !important; gap: 10px !important; padding-left: 20px !important; border-left: 1px solid rgba(255,255,255,0.06) !important;">
+                            <div class="quick-links-group" style="display: flex !important; gap: 6px !important; flex-wrap: wrap !important; justify-content: flex-end !important;">
+                                <a href="${kw.search_url_etsy}" target="_blank" class="trend-link-btn trend-etsy">Etsy</a>
+                                <a href="${kw.search_url_amazon}" target="_blank" class="trend-link-btn trend-amazon">AMZ</a>
+                                <a href="${kw.search_url_pinterest}" target="_blank" class="trend-link-btn trend-pinterest">PIN</a>
+                                <button class="trend-link-btn" onclick="copyToClipboard('${kw.keyword.replace(/'/g,"\\'")}', this)" style="background:rgba(255,255,255,0.06) !important; color: #fff !important;">📋</button>
+                            </div>
+                            ${adminCols}
+                        </div>
+                    </div>`;
+                }).join('');
+
+                // Trigger animation after a slight delay
+                setTimeout(() => {
+                    const fills = document.querySelectorAll('.heat-bar-fill');
+                    fills.forEach(fill => {
+                        fill.style.width = fill.getAttribute('data-target-width');
+                    });
+                }, 100);
+            }
+        }
+
+        // ── Render Holiday Sidebar ──
+        if (holidayList) {
+            if (!holidays || holidays.length === 0) {
+                holidayList.innerHTML = `<p style="text-align:center;opacity:0.5;font-size:0.85em;">Không có ngày lễ trong 3 tháng tới.</p>`;
+            } else {
+                const today = new Date().toISOString().split('T')[0];
+                holidayList.innerHTML = holidays.map(h => {
+                    const todayObj = new Date();
+                    todayObj.setHours(0,0,0,0);
+                    const dateObj = new Date(h.date);
+                    const diffTime = dateObj - todayObj;
+                    const daysUntil = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                    
+                    const isPrep = h.prep_start <= today;
+                    const dayNum = dateObj.getDate();
+                    const monthName = dateObj.toLocaleString('en-US', { month: 'short' }).toUpperCase();
+                    const urgentClass = daysUntil <= 14 ? 'urgent' : '';
+                    
+                    return `
+                    <div class="holiday-card ${urgentClass}">
+                        <div class="holiday-emoji">${h.emoji || '🎉'}</div>
+                        <div class="holiday-details">
+                            <div class="holiday-title">${h.name}</div>
+                            <div class="holiday-date-info">${monthName} ${dayNum} &nbsp;•&nbsp; Chuẩn bị từ: ${h.prep_start}</div>
+                            ${isPrep ? `<div class="urgent-badge">⚠️ Bắt đầu thiết kế!</div>` : ''}
+                        </div>
+                        <div class="holiday-countdown-box">
+                            <div class="holiday-countdown-big" style="color:${daysUntil <= 14 ? '#ef4444' : '#10b981'};">${daysUntil <= 0 ? '0' : daysUntil}</div>
+                            <div class="holiday-countdown-label">Ngày</div>
+                        </div>
+                    </div>`;
+                }).join('');
+            }
+        }
+    } catch (err) {
+        if (container) container.innerHTML = `<div style="text-align:center;padding:30px;color:#ef4444;width:100%;">❌ Lỗi tải dữ liệu: ${err.message}</div>`;
+        console.error('[TRENDING] Render error:', err);
     }
 }
+
+// ── Handlers ──
+window.handlePinTrend = async function(id) {
+    try {
+        await TrendsAPI.togglePin(id);
+        renderTrendingNiches();
+    } catch(e) { showError(e.message); }
+};
+
+window.handleDeleteTrend = async function(id) {
+    if (!confirm('Xóa keyword này?')) return;
+    try {
+        await TrendsAPI.delete(id);
+        showSuccess('Đã xóa keyword!');
+        renderTrendingNiches();
+    } catch(e) { showError(e.message); }
+};
+
+async function handleAddTrendKeyword() {
+    const input = document.getElementById('trend-kw-input');
+    const catSel = document.getElementById('trend-cat-select');
+    const keyword = (input?.value || '').trim();
+    if (!keyword) { showError('Vui lòng nhập keyword!'); return; }
+    const btn = document.getElementById('btn-add-trend-kw');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Đang phân tích AI...'; }
+    try {
+        await TrendsAPI.add(keyword, catSel?.value || '');
+        if (input) input.value = '';
+        showSuccess(`✅ Đã thêm keyword "${keyword}"!`);
+        renderTrendingNiches();
+    } catch(e) {
+        showError(e.message);
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = '💾 Thêm'; }
+    }
+}
+
+async function handleRefreshTrends() {
+    const btn = document.getElementById('btn-refresh-trends');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Đang fetch...'; }
+    try {
+        const res = await TrendsAPI.refresh();
+        showSuccess(res.message || 'Đang cập nhật...');
+        setTimeout(() => renderTrendingNiches(), 35000); // Wait for background fetch
+    } catch(e) {
+        showError(e.message);
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = '🔄 Refresh'; }
+    }
+}
+
+
+// ====== AI CONFIG MODULE ======
+
+const AiConfigAPI = {
+    async getAll()              { return API.fetch('/api/ai-configs'); },
+    async update(purpose, data) { return API.fetch(`/api/ai-configs/${purpose}`, { method: 'PUT', body: JSON.stringify(data) }); },
+    async test(purpose, input)  { return API.fetch('/api/ai-configs/test', { method: 'POST', body: JSON.stringify({ purpose, test_input: input }) }); },
+};
+
+// Models suggestions per provider
+const PROVIDER_MODELS = {
+    gemini:     ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-2.0-pro-exp'],
+    openai:     ['gpt-4o-mini', 'gpt-4o', 'gpt-3.5-turbo', 'gpt-4-turbo'],
+    groq:       ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'mixtral-8x7b-32768', 'gemma2-9b-it'],
+    anthropic:  ['claude-3-5-haiku-20241022', 'claude-3-5-sonnet-20241022', 'claude-3-opus-20240229'],
+    openrouter: ['google/gemma-3-27b-it:free', 'meta-llama/llama-3.3-70b-instruct:free', 'mistralai/mistral-7b-instruct:free', 'anthropic/claude-3.5-sonnet', 'openai/gpt-4o'],
+    '9router':  ['gpt-4o-mini', 'gpt-4o', 'claude-3-5-sonnet-20241022'],
+    ollama:     ['llama3.2:3b', 'llama3.1:8b', 'mistral:7b', 'gemma2:9b', 'phi3:mini'],
+};
+
+const ENV_KEYS_BY_PROVIDER = {
+    gemini:     'GEMINI_API_KEY',
+    openai:     'OPENAI_API_KEY',
+    groq:       'GROQ_API_KEY',
+    anthropic:  'ANTHROPIC_API_KEY',
+    openrouter: 'OPENROUTER_API_KEY',
+    '9router':  'NINEROUTER_API_KEY',
+    ollama:     '',
+};
+
+// State: current editing values
+let aiConfigState = {};
+
+async function renderAiConfigSection() {
+    const container = document.getElementById('ai-config-table-container');
+    if (!container) return;
+
+    try {
+        const { configs, providers } = await AiConfigAPI.getAll();
+        aiConfigState = {};
+
+        // Build config table
+        let html = `
+        <table class="modern-table" style="table-layout:fixed;">
+            <colgroup>
+                <col style="width:28%">
+                <col style="width:18%">
+                <col style="width:26%">
+                <col style="width:20%">
+                <col style="width:8%">
+            </colgroup>
+            <thead>
+                <tr>
+                    <th>Tác Vụ</th>
+                    <th>Provider</th>
+                    <th>Model</th>
+                    <th>API Key Env</th>
+                    <th>Bật</th>
+                </tr>
+            </thead>
+            <tbody>`;
+
+        for (const cfg of configs) {
+            aiConfigState[cfg.purpose] = { ...cfg };
+            const providerOptions = Object.keys(providers).map(p =>
+                `<option value="${p}" ${cfg.provider === p ? 'selected' : ''}>${providers[p].label}</option>`
+            ).join('');
+
+            const modelOptions = (PROVIDER_MODELS[cfg.provider] || [cfg.model]).map(m =>
+                `<option value="${m}" ${cfg.model === m ? 'selected' : ''}>${m}</option>`
+            ).join('');
+
+            const providerInfo = providers[cfg.provider];
+            const statusDot = cfg.is_enabled
+                ? `<span style="color:#10b981;font-size:1.2em;" title="Đang bật">●</span>`
+                : `<span style="color:#6b7280;font-size:1.2em;" title="Đã tắt">●</span>`;
+
+            html += `
+            <tr data-purpose="${cfg.purpose}">
+                <td>
+                    <div style="font-weight:600;font-size:0.9em;">${cfg.purpose_label}</div>
+                    <div style="font-size:0.7em;color:var(--text-secondary);margin-top:2px;">${cfg.purpose}</div>
+                    <button class="btn-small" onclick="testAiConfig('${cfg.purpose}')"
+                        style="margin-top:6px;font-size:0.72em;padding:3px 8px;background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.3);border-radius:6px;color:#818cf8;cursor:pointer;">
+                        🧪 Test
+                    </button>
+                </td>
+                <td>
+                    <select class="ai-provider-select" data-purpose="${cfg.purpose}"
+                        onchange="onAiProviderChange(this)"
+                        style="width:100%;padding:6px 8px;background:var(--input-bg);border:1px solid var(--border-color);border-radius:7px;color:var(--text-primary);font-size:0.82em;">
+                        ${providerOptions}
+                    </select>
+                    ${providerInfo?.format === 'openai' && cfg.provider !== 'openai' ? `<div style="font-size:0.65em;color:#6b7280;margin-top:3px;">OpenAI-compat</div>` : ''}
+                </td>
+                <td>
+                    <select class="ai-model-select" data-purpose="${cfg.purpose}"
+                        style="width:100%;padding:6px 8px;background:var(--input-bg);border:1px solid var(--border-color);border-radius:7px;color:var(--text-primary);font-size:0.82em;">
+                        ${modelOptions}
+                    </select>
+                </td>
+                <td>
+                    <input type="text" class="ai-env-input" data-purpose="${cfg.purpose}"
+                        value="${cfg.api_key_env}"
+                        style="width:100%;padding:6px 8px;background:var(--input-bg);border:1px solid var(--border-color);border-radius:7px;color:var(--text-primary);font-size:0.8em;box-sizing:border-box;"
+                        placeholder="ENV_VAR_NAME">
+                    ${cfg.provider === 'ollama' || cfg.provider === '9router'
+                        ? `<div style="font-size:0.65em;color:#10b981;margin-top:2px;">✓ Không cần key</div>`
+                        : `<div style="font-size:0.65em;color:var(--text-secondary);margin-top:2px;">.env key name</div>`}
+                </td>
+                <td style="text-align:center;">
+                    <label class="toggle-switch" style="margin:0 auto;">
+                        <input type="checkbox" class="ai-enabled-check" data-purpose="${cfg.purpose}"
+                            ${cfg.is_enabled ? 'checked' : ''}>
+                        <span class="toggle-slider"></span>
+                    </label>
+                </td>
+            </tr>`;
+        }
+
+        html += `</tbody></table>`;
+
+        // Add custom base_url section
+        html += `
+        <div style="margin-top:16px;padding:12px 14px;background:rgba(255,255,255,0.03);border-radius:10px;border:1px solid rgba(255,255,255,0.07);">
+            <div style="font-size:0.82em;color:var(--text-secondary);margin-bottom:10px;font-weight:600;">🔗 Custom Base URL <span style="font-weight:400;">(tùy chỉnh cho Ollama / 9Router / Self-hosted)</span></div>
+            ${configs.map(cfg => `
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;" data-base-purpose="${cfg.purpose}">
+                <span style="font-size:0.78em;color:var(--text-secondary);min-width:140px;">${cfg.purpose_label.replace(/[^\w\s]/g,'').trim() || cfg.purpose}:</span>
+                <input type="text" class="ai-baseurl-input" data-purpose="${cfg.purpose}"
+                    value="${cfg.base_url || ''}"
+                    placeholder="Để trống = dùng URL mặc định của provider"
+                    style="flex:1;padding:5px 10px;background:var(--input-bg);border:1px solid var(--border-color);border-radius:7px;color:var(--text-primary);font-size:0.8em;">
+            </div>`).join('')}
+        </div>`;
+
+        container.innerHTML = html;
+
+        // Wire up save button
+        document.getElementById('btn-ai-save-all')?.addEventListener('click', saveAllAiConfigs);
+        document.getElementById('btn-ai-test-all')?.addEventListener('click', () => {
+            const input = document.getElementById('ai-test-input')?.value?.trim() || 'funny dog mom shirt';
+            configs.forEach(cfg => cfg.is_enabled && testAiConfig(cfg.purpose, input));
+        });
+
+    } catch (e) {
+        if (container) container.innerHTML = `<p style="color:#ef4444;">❌ Lỗi tải AI config: ${e.message}</p>`;
+    }
+}
+
+// Update model dropdown when provider changes
+window.onAiProviderChange = function(selectEl) {
+    const purpose = selectEl.dataset.purpose;
+    const provider = selectEl.value;
+    const row = document.querySelector(`tr[data-purpose="${purpose}"]`);
+    if (!row) return;
+
+    // Update model options
+    const modelSel = row.querySelector('.ai-model-select');
+    const models = PROVIDER_MODELS[provider] || [];
+    modelSel.innerHTML = models.map((m, i) => `<option value="${m}" ${i === 0 ? 'selected' : ''}>${m}</option>`).join('');
+
+    // Update env key suggestion
+    const envInput = row.querySelector('.ai-env-input');
+    const suggestedEnv = ENV_KEYS_BY_PROVIDER[provider] || '';
+    envInput.value = suggestedEnv;
+};
+
+async function saveAllAiConfigs() {
+    const btn = document.getElementById('btn-ai-save-all');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Đang lưu...'; }
+
+    const rows = document.querySelectorAll('tr[data-purpose]');
+    let saved = 0, errors = 0;
+
+    for (const row of rows) {
+        const purpose = row.dataset.purpose;
+        const provider  = row.querySelector('.ai-provider-select')?.value || 'gemini';
+        const model     = row.querySelector('.ai-model-select')?.value || '';
+        const api_key_env = row.querySelector('.ai-env-input')?.value?.trim() || '';
+        const is_enabled  = row.querySelector('.ai-enabled-check')?.checked ? 1 : 0;
+        const base_url  = document.querySelector(`.ai-baseurl-input[data-purpose="${purpose}"]`)?.value?.trim() || '';
+
+        try {
+            await AiConfigAPI.update(purpose, { provider, model, api_key_env, is_enabled, base_url, temperature: 0.3, max_tokens: 500 });
+            saved++;
+        } catch(e) {
+            errors++;
+            console.error(`Save AI config ${purpose} failed:`, e.message);
+        }
+    }
+
+    if (btn) { btn.disabled = false; btn.textContent = '💾 Lưu Tất Cả'; }
+    if (errors === 0) showSuccess(`✅ Đã lưu ${saved} cấu hình AI!`);
+    else showError(`Lưu ${saved} thành công, ${errors} lỗi.`);
+}
+
+window.testAiConfig = async function(purpose, input) {
+    const testInput = input || document.getElementById('ai-test-input')?.value?.trim() || 'funny dog mom shirt';
+    const resultDiv  = document.getElementById('ai-test-result');
+    const metaDiv    = document.getElementById('ai-test-meta');
+    const contentPre = document.getElementById('ai-test-content');
+
+    if (resultDiv) {
+        resultDiv.classList.remove('hidden');
+        resultDiv.style.borderColor = 'rgba(99,102,241,0.3)';
+        resultDiv.style.background  = 'rgba(99,102,241,0.05)';
+    }
+    if (metaDiv)    metaDiv.textContent    = `⏳ Đang test "${purpose}" với keyword: "${testInput}"...`;
+    if (contentPre) contentPre.textContent = '';
+
+    try {
+        const res = await AiConfigAPI.test(purpose, testInput);
+        if (resultDiv) {
+            resultDiv.style.borderColor = res.success ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)';
+            resultDiv.style.background  = res.success ? 'rgba(16,185,129,0.07)' : 'rgba(239,68,68,0.07)';
+        }
+        if (metaDiv)    metaDiv.textContent    = `${res.success ? '✅' : '⚠️'} Purpose: ${purpose} | Thời gian: ${res.ms}ms | Input: "${res.input || testInput}"`;
+        if (contentPre) contentPre.textContent = res.response || res.message || 'No response';
+    } catch(e) {
+        if (resultDiv) { resultDiv.style.borderColor = 'rgba(239,68,68,0.3)'; resultDiv.style.background = 'rgba(239,68,68,0.07)'; }
+        if (metaDiv)    metaDiv.textContent    = `❌ Lỗi: ${e.message}`;
+        if (contentPre) contentPre.textContent = '';
+    }
+};

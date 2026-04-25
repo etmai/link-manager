@@ -1237,16 +1237,174 @@ app.delete('/api/trello/attachments/:taskId/:attachmentId', authenticateToken, a
     }
 });
 
-initDb().then(() => {
-    // Run cleanup on startup
+// ====== MULTI-PROVIDER AI ROUTER ======
+const AI_PROVIDERS_CATALOG = {
+    gemini:     { label: 'Google Gemini',   format: 'gemini',    defaultModel: 'gemini-2.0-flash' },
+    openai:     { label: 'OpenAI',          format: 'openai',    defaultModel: 'gpt-4o-mini' },
+    groq:       { label: 'Groq (Fast)',     format: 'openai',    defaultModel: 'llama-3.3-70b-versatile', baseUrl: 'https://api.groq.com/openai/v1' },
+    anthropic:  { label: 'Anthropic Claude',format: 'anthropic', defaultModel: 'claude-3-5-haiku-20241022' },
+    openrouter: { label: 'OpenRouter',      format: 'openai',    defaultModel: 'google/gemma-3-27b-it:free', baseUrl: 'https://openrouter.ai/api/v1' },
+    '9router':  { label: '9Router (Local)', format: 'openai',    defaultModel: 'gpt-4o-mini', baseUrl: 'http://localhost:20128/v1' },
+    ollama:     { label: 'Ollama (Local)',  format: 'openai',    defaultModel: 'llama3.2:3b', baseUrl: 'http://localhost:11434/v1' },
+};
+
+async function initAiConfigTable() {
+    try {
+        await db.exec(`
+            CREATE TABLE IF NOT EXISTS ai_configs (
+                id TEXT PRIMARY KEY, purpose TEXT UNIQUE NOT NULL, purpose_label TEXT NOT NULL,
+                provider TEXT NOT NULL DEFAULT 'gemini', model TEXT NOT NULL DEFAULT 'gemini-2.0-flash',
+                base_url TEXT DEFAULT '', api_key_env TEXT DEFAULT 'GEMINI_API_KEY',
+                temperature REAL DEFAULT 0.3, max_tokens INTEGER DEFAULT 500,
+                is_enabled INTEGER DEFAULT 1, updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
+    } catch (e) { console.error('Error init ai_configs:', e); }
+}
+
+async function callAI(purpose, prompt) {
+    try {
+        const cfg = await db.get('SELECT * FROM ai_configs WHERE purpose = ? AND is_enabled = 1', [purpose]);
+        if (!cfg) return null;
+        const apiKey = process.env[cfg.api_key_env] || '';
+        const catalog = AI_PROVIDERS_CATALOG[cfg.provider];
+        if (catalog?.format === 'gemini') {
+            const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${cfg.model}:generateContent?key=${apiKey}`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+            });
+            const data = await res.json();
+            return data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        } else {
+            const baseUrl = cfg.base_url || catalog.baseUrl || 'https://api.openai.com/v1';
+            const res = await fetch(`${baseUrl}/chat/completions`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey || 'no-key'}` },
+                body: JSON.stringify({ model: cfg.model, messages: [{ role: 'user', content: prompt }] })
+            });
+            const data = await res.json();
+            return data?.choices?.[0]?.message?.content || '';
+        }
+    } catch (e) { console.error(`[AI] ${purpose} failed:`, e.message); return null; }
+}
+
+async function analyzeKeywordWithGemini(keyword) {
+    try {
+        const text = await callAI('trend_analysis', `Analyze: "${keyword}". Return JSON: {"category":"pets","summary":"..."}`);
+        return JSON.parse(text.replace(/```json\n?|```/g, ''));
+    } catch (e) { return { category: 'general', summary: '', pod_relevant: true }; }
+}
+
+// ====== TRENDING NICHES (PUSH VERSION) ======
+async function initTrendingTables() {
+    await db.exec(`
+        CREATE TABLE IF NOT EXISTS trending_keywords (
+            id TEXT PRIMARY KEY, keyword TEXT UNIQUE NOT NULL, heat_score INTEGER DEFAULT 50,
+            category TEXT DEFAULT 'general', ai_summary TEXT, search_url_etsy TEXT,
+            search_url_amazon TEXT, search_url_pinterest TEXT, is_pinned INTEGER DEFAULT 0,
+            source TEXT DEFAULT 'google_trends', fetched_at TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS pod_holidays (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, date TEXT NOT NULL,
+            heat_score INTEGER DEFAULT 50, prep_start TEXT, emoji TEXT DEFAULT '🎉'
+        );
+    `);
+}
+
+const verifyPushSecret = (req, res, next) => {
+    if (req.headers['x-push-secret'] !== process.env.PUSH_SECRET) return res.status(401).send('Unauthorized');
+    next();
+};
+
+app.post('/api/push/trends', verifyPushSecret, async (req, res) => {
+    try {
+        const { keywords } = req.body;
+        await db.run("DELETE FROM trending_keywords WHERE source = 'google_trends' AND is_pinned = 0");
+        for (const kw of keywords) {
+            await db.run(`INSERT INTO trending_keywords (id, keyword, heat_score, category, ai_summary, source) VALUES (?, ?, ?, ?, ?, ?)`,
+                [require('crypto').randomUUID(), kw.keyword, kw.heat_score, kw.category, kw.ai_summary, 'google_trends']);
+        }
+        res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/push/holidays', verifyPushSecret, async (req, res) => {
+    try {
+        const { holidays } = req.body;
+        await db.run('DELETE FROM pod_holidays');
+        for (const h of holidays) {
+            await db.run(`INSERT INTO pod_holidays (name, date, heat_score, prep_start, emoji) VALUES (?, ?, ?, ?, ?)`,
+                [h.name, h.date, h.heat_score, h.prep_start, h.emoji]);
+        }
+        res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/trends', authenticateToken, async (req, res) => {
+    try { res.json(await db.all('SELECT * FROM trending_keywords ORDER BY is_pinned DESC, heat_score DESC LIMIT 50')); }
+    catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/holidays', authenticateToken, async (req, res) => {
+    try {
+        const today = new Date().toISOString().split('T')[0];
+        res.json(await db.all('SELECT * FROM pod_holidays WHERE date >= ? ORDER BY date ASC LIMIT 15', [today]));
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.patch('/api/trends/:id/pin', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const row = await db.get('SELECT is_pinned FROM trending_keywords WHERE id = ?', [req.params.id]);
+        if (row) await db.run('UPDATE trending_keywords SET is_pinned = ? WHERE id = ?', [row.is_pinned ? 0 : 1, req.params.id]);
+        res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/trends/:id', authenticateToken, requireAdmin, async (req, res) => {
+    try { await db.run('DELETE FROM trending_keywords WHERE id = ?', [req.params.id]); res.json({ success: true }); }
+    catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/ai-configs', authenticateToken, requireAdmin, async (req, res) => {
+    try { res.json({ configs: await db.all('SELECT * FROM ai_configs ORDER BY purpose ASC'), providers: AI_PROVIDERS_CATALOG }); }
+    catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.put('/api/ai-configs/:purpose', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const { provider, model, base_url, api_key_env, is_enabled } = req.body;
+        await db.run(`UPDATE ai_configs SET provider=?, model=?, base_url=?, api_key_env=?, is_enabled=?, updated_at=datetime('now') WHERE purpose=?`,
+            [provider, model, base_url || '', api_key_env, is_enabled ?? 1, req.params.purpose]);
+        res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/ai-configs/test', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const { purpose, test_input } = req.body;
+        const text = await callAI(purpose, test_input || 'funny dog mom shirt');
+        res.json({ success: true, response: text });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ====== STARTUP ======
+initDb().then(async () => {
     cleanupExpiredSamples();
-    
-    // Schedule cleanup every 24 hours (at midnight)
     setInterval(cleanupExpiredSamples, 24 * 60 * 60 * 1000);
     
+    await initTrendingTables();
+    await initAiConfigTable();
+
+    // Placeholder data to prevent empty UI
+    const count = await db.get('SELECT COUNT(*) as c FROM trending_keywords');
+    if (count.c === 0) {
+        await db.run(`INSERT INTO trending_keywords (id, keyword, heat_score, category, ai_summary, source) VALUES (?, ?, ?, ?, ?, ?)`,
+            [require('crypto').randomUUID(), 'Welcome to Dinoz Trends', 99, 'general', 'Hệ thống đang chờ dữ liệu từ VPS Pipeline...', 'manual']);
+    }
+
     app.listen(PORT, () => {
-        console.log(`Node Server is running on port ${PORT}`);
+        console.log(`🚀 Dinoz Server is LIVE on port ${PORT}`);
     });
 }).catch(err => {
     console.error('Failed to init Database Server:', err);
 });
+
