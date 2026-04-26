@@ -914,6 +914,10 @@
                     <div id="task-desc-preview" class="markdown-body hidden" style="background:rgba(0,0,0,0.2); padding:15px; border-radius:8px; min-height:120px; overflow-y:auto; border:1px solid var(--panel-border);"></div>
                 </div>
             </div>
+            <div class="input-group">
+                <label style="color: var(--success-color); font-weight: 600;">Danh mục</label>
+                <div class="checkbox-group" id="task-categories"></div>
+            </div>
 
             <div id="trello-section" class="hidden" style="margin-top:15px; padding:15px; border-radius:12px; background:rgba(0,0,0,0.15); border:1px solid var(--panel-border);">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
@@ -973,6 +977,16 @@
                     <label style="display:block; font-size: 0.75em; color: var(--text-secondary); margin-bottom: 8px; text-transform: uppercase;">Tệp đính kèm (Trello)</label>
                     <div id="detail-trello-attachments" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap:10px;"></div>
                 </div>
+                <div class="detail-row">
+                    <label style="display:block; font-size: 0.75em; color: var(--text-secondary); margin-bottom: 10px; text-transform: uppercase;">Bình luận & Thảo luận</label>
+                    <div id="task-comments-list" style="display:flex; flex-direction:column; gap:12px; margin-bottom:15px; max-height: 300px; overflow-y: auto; padding-right: 5px;">
+                        <!-- Comments will be injected here -->
+                    </div>
+                    <div class="comment-input-wrapper" style="display:flex; gap:10px;">
+                        <textarea id="task-comment-input" rows="2" placeholder="Viết phản hồi hoặc ghi chú..." style="flex:1; min-height: 60px; padding: 10px; border-radius: 8px; background: rgba(255,255,255,0.05); border: 1px solid var(--panel-border); color: var(--text-primary); font-size: 0.9em; resize: none;"></textarea>
+                        <button type="button" id="btn-add-comment" class="btn-primary" style="padding: 0 15px; height: 60px;">Gửi</button>
+                    </div>
+                </div>
             </div>
             <div class="modal-actions" style="margin-top: 30px;">
                 <div id="admin-detail-actions" class="hidden" style="display:flex; gap:10px;">
@@ -984,7 +998,7 @@
         </div>
     </div>
     <!-- Bắt buộc load JS phiên bản mới (Bypass Cache) -->
-    <script src="app.js?v=16.0.0"></script>
+    <script src="app.js?v=16.0.1"></script>
 </body>
 
 </html>

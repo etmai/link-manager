@@ -165,6 +165,13 @@ async function initDb() {
             createdAt TEXT NOT NULL,
             addedBy TEXT DEFAULT ''
         );
+        CREATE TABLE IF NOT EXISTS task_comments (
+            id TEXT PRIMARY KEY,
+            taskId TEXT NOT NULL,
+            username TEXT NOT NULL,
+            content TEXT NOT NULL,
+            createdAt TEXT NOT NULL
+        );
     `);
 
     // Add columns if they don't exist (Migration)
@@ -185,6 +192,9 @@ async function initDb() {
     }
     if (!scheduleColNames.includes('trelloCardId')) {
         await db.run("ALTER TABLE work_schedule ADD COLUMN trelloCardId TEXT");
+    }
+    if (!scheduleColNames.includes('categories')) {
+        await db.run("ALTER TABLE work_schedule ADD COLUMN categories TEXT");
     }
     if (!scheduleColNames.includes('creatorRole')) {
         await db.run("ALTER TABLE work_schedule ADD COLUMN creatorRole TEXT DEFAULT 'admin'");
@@ -850,7 +860,7 @@ app.get('/api/schedule', authenticateToken, async (req, res) => {
 });
 
 app.post('/api/schedule', authenticateToken, async (req, res) => {
-    const { title, description, date, userId } = req.body;
+    const { title, description, date, userId, categories } = req.body;
     if (!title || !date) return res.status(400).json({ error: 'Tiêu đề và ngày không được để trống!' });
     
     // Default to self, but admin can assign to others
@@ -861,22 +871,36 @@ app.post('/api/schedule', authenticateToken, async (req, res) => {
 
     const id = randomUUID();
     await db.run(
-        'INSERT INTO work_schedule (id, title, description, date, userId, status, createdBy, creatorRole, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [id, title.trim(), description || '', date, targetUser, 'pending', req.user.username, req.user.role, new Date().toISOString()]
+        'INSERT INTO work_schedule (id, title, description, date, userId, status, createdBy, creatorRole, createdAt, categories) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [id, title.trim(), description || '', date, targetUser, 'pending', req.user.username, req.user.role, new Date().toISOString(), JSON.stringify(categories || [])]
     );
     res.json({ success: true, id });
 });
 
 app.put('/api/schedule/:id', authenticateToken, async (req, res) => {
     const { id } = req.params;
-    const { title, description, date, status, userId } = req.body;
+    const { title, description, date, status, userId, categories } = req.body;
     
     const entry = await db.get('SELECT * FROM work_schedule WHERE id = ?', [id]);
     if (!entry) return res.status(404).json({ error: 'Không tìm thấy công việc!' });
     
-    // Permission check: owner or admin
-    if (entry.userId !== req.user.username && req.user.role !== 'admin') {
-        return res.status(403).json({ error: 'Bạn không có quyền sửa công việc này!' });
+    // Permission check
+    const isAdmin = req.user.role === 'admin';
+    const isCreator = entry.createdBy === req.user.username;
+    const isAssignee = entry.userId === req.user.username;
+    const isAdminCreated = entry.creatorRole === 'admin';
+
+    // Users can view/comment/complete Admin-created tasks
+    if (!isAdmin && !isCreator && !isAssignee && !isAdminCreated) {
+        return res.status(403).json({ error: 'Bạn không có quyền thao tác trên công việc này!' });
+    }
+
+    // If not Admin and not Creator, can ONLY update status
+    // If it's an Admin-created task, any user can update status (according to request)
+    if (!isAdmin && !isCreator) {
+        if (title || description || date || userId || categories) {
+            return res.status(403).json({ error: 'Bạn chỉ có quyền cập nhật trạng thái (Hoàn thành) cho công việc này!' });
+        }
     }
 
     // Admin can reassign
@@ -886,8 +910,8 @@ app.put('/api/schedule/:id', authenticateToken, async (req, res) => {
     }
 
     await db.run(
-        'UPDATE work_schedule SET title = ?, description = ?, date = ?, status = ?, userId = ? WHERE id = ?',
-        [title || entry.title, description !== undefined ? description : entry.description, date || entry.date, status || entry.status, targetUser, id]
+        'UPDATE work_schedule SET title = ?, description = ?, date = ?, status = ?, userId = ?, categories = ? WHERE id = ?',
+        [title || entry.title, description !== undefined ? description : entry.description, date || entry.date, status || entry.status, targetUser, JSON.stringify(categories || JSON.parse(entry.categories || '[]')), id]
     );
     res.json({ success: true });
 });
@@ -897,13 +921,16 @@ app.delete('/api/schedule/:id', authenticateToken, async (req, res) => {
     const entry = await db.get('SELECT * FROM work_schedule WHERE id = ?', [id]);
     if (!entry) return res.status(404).json({ error: 'Không tìm thấy công việc!' });
     
-    // Permission check: owner or admin
-    if (entry.userId !== req.user.username && req.user.role !== 'admin') {
+    // Permission check: Only admin or creator can delete
+    const isAdmin = req.user.role === 'admin';
+    const isCreator = entry.createdBy === req.user.username;
+
+    if (!isAdmin && !isCreator) {
         return res.status(403).json({ error: 'Bạn không có quyền xóa công việc này!' });
     }
 
-    // New permission check: User cannot delete Admin-created tasks
-    if (req.user.role === 'user' && entry.creatorRole === 'admin') {
+    // Secondary check: Non-admins cannot delete Admin-created tasks
+    if (!isAdmin && entry.creatorRole === 'admin') {
         return res.status(403).json({ error: 'Bạn không thể xóa công việc được tạo bởi Admin!' });
     }
 
@@ -921,7 +948,29 @@ app.delete('/api/schedule/:id', authenticateToken, async (req, res) => {
     }
 
     await db.run('DELETE FROM work_schedule WHERE id = ?', [id]);
+    // Delete comments
+    await db.run('DELETE FROM task_comments WHERE taskId = ?', [id]);
     res.json({ success: true });
+});
+
+// Task comments
+app.get('/api/schedule/:taskId/comments', authenticateToken, async (req, res) => {
+    const { taskId } = req.params;
+    const rows = await db.all('SELECT * FROM task_comments WHERE taskId = ? ORDER BY createdAt ASC', [taskId]);
+    res.json(rows);
+});
+
+app.post('/api/schedule/:taskId/comments', authenticateToken, async (req, res) => {
+    const { taskId } = req.params;
+    const { content } = req.body;
+    if (!content) return res.status(400).json({ error: 'Nội dung bình luận không được để trống!' });
+
+    const id = randomUUID();
+    await db.run(
+        'INSERT INTO task_comments (id, taskId, username, content, createdAt) VALUES (?, ?, ?, ?, ?)',
+        [id, taskId, req.user.username, content, new Date().toISOString()]
+    );
+    res.json({ success: true, id });
 });
 
 // =========== SAMPLE REQUESTS CRUD ===========
