@@ -1324,6 +1324,11 @@ async function initTrendingTables() {
             id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, date TEXT NOT NULL,
             heat_score INTEGER DEFAULT 50, prep_start TEXT, emoji TEXT DEFAULT '🎉'
         );
+        CREATE TABLE IF NOT EXISTS evergreen_keywords (
+            id TEXT PRIMARY KEY, keyword TEXT UNIQUE NOT NULL,
+            category TEXT, source TEXT DEFAULT 'google_sheet',
+            createdAt TEXT DEFAULT CURRENT_TIMESTAMP
+        );
     `);
 }
 
@@ -1352,6 +1357,92 @@ app.post('/api/push/holidays', verifyPushSecret, async (req, res) => {
             await db.run(`INSERT INTO pod_holidays (name, date, heat_score, prep_start, emoji) VALUES (?, ?, ?, ?, ?)`,
                 [h.name, h.date, h.heat_score, h.prep_start, h.emoji]);
         }
+        res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ====== EVERGREEN KEYWORDS ENDPOINTS ======
+app.get('/api/evergreen', authenticateToken, async (req, res) => {
+    try {
+        const rows = await db.all('SELECT * FROM evergreen_keywords ORDER BY createdAt DESC');
+        res.json(rows);
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Helper to fetch data and follow redirects (needed for Google Sheets)
+async function fetchWithRedirects(url, depth = 0) {
+    if (depth > 5) throw new Error('Too many redirects');
+    return new Promise((resolve, reject) => {
+        https.get(url, (res) => {
+            if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+                resolve(fetchWithRedirects(res.headers.location, depth + 1));
+            } else {
+                let data = '';
+                res.on('data', chunk => data += chunk);
+                res.on('end', () => resolve(data));
+            }
+        }).on('error', reject);
+    });
+}
+
+app.post('/api/evergreen/import', authenticateToken, requireAdmin, async (req, res) => {
+    const { count = 10 } = req.body;
+    const sheetUrl = process.env.EVERGREEN_SHEET_URL;
+
+    if (!sheetUrl || sheetUrl.includes('YOUR_SHEET_ID_HERE')) {
+        return res.status(400).json({ error: 'Chưa cấu hình EVERGREEN_SHEET_URL trong .env' });
+    }
+
+    try {
+        // Fetch CSV from Google Sheet (now following redirects)
+        const csvData = await fetchWithRedirects(sheetUrl);
+
+        // Parse CSV (simple line-based parsing)
+        const lines = csvData.split(/\r?\n/).filter(line => line.trim());
+        const sheetKeywords = lines.map(line => {
+            const parts = line.split(',');
+            return parts[0].replace(/"/g, '').trim(); // Assume keyword is in first column
+        }).filter(kw => kw && kw.toLowerCase() !== 'keyword' && kw.toLowerCase() !== 'niche');
+
+        // Get existing evergreen keywords to avoid duplicates
+        const existingRows = await db.all('SELECT keyword FROM evergreen_keywords');
+        const existingSet = new Set(existingRows.map(r => r.keyword.toLowerCase()));
+
+        // Filter for new keywords only
+        const newKeywords = sheetKeywords.filter(kw => !existingSet.has(kw.toLowerCase()));
+
+        // Randomly pick N keywords
+        const shuffled = newKeywords.sort(() => 0.5 - Math.random());
+        const selection = shuffled.slice(0, count);
+
+        res.json({
+            total_in_sheet: sheetKeywords.length,
+            new_available: newKeywords.length,
+            selection: selection
+        });
+    } catch (e) {
+        res.status(500).json({ error: 'Lỗi import từ Google Sheet: ' + e.message });
+    }
+});
+
+app.post('/api/evergreen', authenticateToken, requireAdmin, async (req, res) => {
+    const { keywords, category = 'Evergreen' } = req.body;
+    if (!Array.isArray(keywords)) return res.status(400).json({ error: 'Keywords must be an array' });
+
+    try {
+        for (const kw of keywords) {
+            await db.run(
+                'INSERT OR IGNORE INTO evergreen_keywords (id, keyword, category, createdAt) VALUES (?, ?, ?, ?)',
+                [randomUUID(), kw.trim(), category, new Date().toISOString()]
+            );
+        }
+        res.json({ success: true, message: `Đã thêm ${keywords.length} keywords.` });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/evergreen/:id', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        await db.run('DELETE FROM evergreen_keywords WHERE id = ?', [req.params.id]);
         res.json({ success: true });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });

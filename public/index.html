@@ -597,9 +597,33 @@
             <!-- ===== TAB: TRENDING NICHES (MỚI) ===== -->
             <div id="trending-niches-tab" class="tab-content">
                 <div class="content-wrapper trending-layout">
-                    <!-- Khu vực 1: Top Trending Niches (Cards) -->
+                    <!-- Khu vực 1: Evergreen & Trending Niches -->
                     <div class="trends-main">
-                        <div style="margin-bottom: 24px;">
+                        <!-- MỚI: Khu vực Evergreen Keywords (Lên đầu) -->
+                        <div class="evergreen-section" style="margin-bottom: 48px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                                <h3 style="margin: 0; font-size: 1.3em; font-weight:700; color:#10b981; display:flex; align-items:center; gap:8px;">
+                                    🌲 Evergreen Keywords <span style="font-size:0.5em; color:var(--text-secondary); font-weight:normal;">(Manual Import)</span>
+                                </h3>
+                                <div id="evergreen-admin-controls"></div>
+                            </div>
+                            
+                            <div id="evergreen-import-preview" class="hidden" style="margin-bottom: 24px; padding: 20px; background: rgba(16, 185, 129, 0.05); border: 1px dashed #10b981; border-radius: 12px;">
+                                <h4 style="margin-bottom: 12px; color: #10b981;">🔍 Kết quả lọc mới:</h4>
+                                <div id="evergreen-preview-list" style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom: 16px;"></div>
+                                <div style="display:flex; gap:12px;">
+                                    <button id="btn-save-evergreen" class="btn-primary" style="background:#10b981; border-color:#059669;">💾 Lưu vào danh sách</button>
+                                    <button id="btn-cancel-evergreen" class="btn-secondary">Hủy</button>
+                                </div>
+                            </div>
+
+                            <div class="niche-cards-grid" id="evergreen-container">
+                                <!-- Evergreen cards injected by JS -->
+                            </div>
+                        </div>
+
+                        <!-- Top Trending Niches (Cards) -->
+                        <div style="margin-bottom: 24px; padding-top: 32px; border-top: 1px solid rgba(255,255,255,0.1);">
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap:wrap; gap:10px;">
                                 <h3 style="margin: 0; font-size: 1.3em; font-weight:700; color:#f8fafc; display:flex; align-items:center; gap:8px;">
                                     🚀 Top Trending Niches <span style="font-size:0.5em; color:var(--text-secondary); font-weight:normal;">(Live from Telegram)</span>
@@ -616,7 +640,7 @@
                             <!-- GRID CONTAINER: Nơi JS đúc các Niche Cards vào -->
                             <div class="niche-cards-grid" id="trend-cards-container">
                                 <!-- Cards injected by JS -->
-                            </div>
+                             </div>
                         </div>
                     </div>
 

@@ -3329,6 +3329,22 @@ const TrendsAPI = {
     async delete(id)              { return API.fetch(`/api/trends/${id}`, { method: 'DELETE' }); },
     async getHolidays(all = false){ return API.fetch(`/api/holidays${all ? '?all=1' : ''}`); },
     async getUSAHolidays()        { return API.fetch('/api/usa-holidays'); },
+    async getEvergreen()          { return API.fetch('/api/evergreen'); },
+    async importEvergreen(count)  { 
+        return API.fetch('/api/evergreen/import', {
+            method: 'POST',
+            body: JSON.stringify({ count })
+        });
+    },
+    async saveEvergreen(keywords) {
+        return API.fetch('/api/evergreen', {
+            method: 'POST',
+            body: JSON.stringify({ keywords })
+        });
+    },
+    async deleteEvergreen(id)     {
+        return API.fetch(`/api/evergreen/${id}`, { method: 'DELETE' });
+    },
     async refresh()               { 
         await renderTrendingNiches(); 
         return { success: true, message: 'Đã cập nhật dữ liệu...' };
@@ -3442,6 +3458,23 @@ async function renderTrendingNiches() {
                 if (e.key === 'Enter') handleAddTrendKeyword(); 
             });
         }
+
+        // ── Evergreen Admin UI ──
+        const evergreenAdmin = document.getElementById('evergreen-admin-controls');
+        if (evergreenAdmin) evergreenAdmin.innerHTML = '';
+        if (isAdmin && evergreenAdmin) {
+            evergreenAdmin.innerHTML = `
+                <div style="display:flex;gap:10px;align-items:center;">
+                    <span style="font-size:0.85em;color:var(--text-secondary);">Số lượng:</span>
+                    <input type="number" id="evergreen-import-count" value="10" min="1" max="100" style="width:60px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:4px 8px;color:#fff;">
+                    <button id="btn-import-evergreen" class="btn-primary" style="background:#10b981;border-color:#059669;padding:6px 16px;font-size:0.85em;border-radius:12px;">📥 Import Manual</button>
+                </div>
+            `;
+            document.getElementById('btn-import-evergreen').onclick = handleImportEvergreen;
+        }
+
+        // ── Load Evergreen Keywords ──
+        renderEvergreenKeywords();
     
     // ── Fetch data ──
     try {
@@ -3591,6 +3624,148 @@ async function renderTrendingNiches() {
         console.error('[TRENDING] Render error:', err);
     }
 }
+
+let pendingEvergreenSelection = [];
+
+async function renderEvergreenKeywords() {
+    const container = document.getElementById('evergreen-container');
+    if (!container) return;
+
+    try {
+        const keywords = await TrendsAPI.getEvergreen();
+        if (!keywords || keywords.length === 0) {
+            container.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-secondary);width:100%;grid-column: 1 / -1;">Chưa có Evergreen keywords nào.</div>`;
+            return;
+        }
+
+        const currentUser = getCurrentUser();
+        const isAdmin = currentUser && currentUser.role === 'admin';
+
+        container.innerHTML = keywords.map(kw => {
+            const q = encodeURIComponent(kw.keyword).replace(/%20/g, '+');
+            const etsyUrl = `https://www.etsy.com/search?q=${q}&order=date_desc`;
+            const amzUrl = `https://www.amazon.com/s?k=${q}&crid=PZTCPMQK2YK8&sprefix=${encodeURIComponent(kw.keyword.toLowerCase()).replace(/%20/g, '+')}%2Caps%2C134&ref=nb_sb_noss`;
+            const pinUrl = `https://www.pinterest.com/search/pins/?q=${q}&rs=shopping_filter&filter_location=1&domains=etsy.com&commerce_only=true`;
+            const cfabUrl = `https://www.creativefabrica.com/search/?query=${encodeURIComponent(kw.keyword)}&sortBy=newest`;
+
+            return `
+            <div class="dinoz-premium-list-item" style="border-color: rgba(16, 185, 129, 0.2) !important;">
+                <div class="niche-card-header">
+                    <div style="display:flex; flex-direction:column; gap:4px; width:100%;">
+                        <h4 class="niche-card-title">🌲 ${kw.keyword}</h4>
+                        <button class="trend-copy-inline-btn" onclick="copyToClipboard('${kw.keyword.replace(/'/g,"\\'")}', this)">📋 Copy Keyword</button>
+                    </div>
+                </div>
+                
+                <div class="niche-card-footer" style="border-top: 1px solid rgba(16, 185, 129, 0.1);">
+                    <div class="quick-links-group">
+                        <div class="quick-links-row">
+                            <a href="${etsyUrl}" target="_blank" class="trend-link-btn trend-etsy">Etsy</a>
+                            <a href="${amzUrl}" target="_blank" class="trend-link-btn trend-amazon">AMZ</a>
+                            <a href="${pinUrl}" target="_blank" class="trend-link-btn trend-pinterest">PIN</a>
+                        </div>
+                        <div class="quick-links-row">
+                            <a href="${cfabUrl}" target="_blank" class="trend-link-btn trend-cfab">CFab</a>
+                            ${isAdmin ? `<button class="trend-link-btn btn-danger trend-delete-btn" onclick="handleDeleteEvergreen('${kw.id}')">Xóa</button>` : ''}
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+        }).join('');
+
+    } catch (e) {
+        container.innerHTML = `<div style="text-align:center;padding:20px;color:#ef4444;width:100%;grid-column: 1 / -1;">❌ Lỗi: ${e.message}</div>`;
+    }
+}
+
+async function handleImportEvergreen() {
+    const countInput = document.getElementById('evergreen-import-count');
+    const btn = document.getElementById('btn-import-evergreen');
+    const count = parseInt(countInput?.value) || 10;
+    const previewArea = document.getElementById('evergreen-import-preview');
+    const previewList = document.getElementById('evergreen-preview-list');
+
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Đang lọc...'; }
+
+    try {
+        const data = await TrendsAPI.importEvergreen(count);
+        pendingEvergreenSelection = data.selection;
+
+        if (pendingEvergreenSelection.length === 0) {
+            showError('Không tìm thấy keyword mới nào để import (đã trùng hết hoặc sheet trống).');
+            return;
+        }
+
+        renderEvergreenPreview();
+        showSuccess(`Đã tìm thấy ${data.new_available} keyword mới. Đã chọn ${pendingEvergreenSelection.length} mẫu.`);
+
+    } catch (e) {
+        showError(e.message);
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = '📥 Import Manual'; }
+    }
+}
+
+function renderEvergreenPreview() {
+    const previewList = document.getElementById('evergreen-preview-list');
+    const previewArea = document.getElementById('evergreen-import-preview');
+    
+    if (!previewList) return;
+    
+    if (pendingEvergreenSelection.length === 0) {
+        previewArea.classList.add('hidden');
+        return;
+    }
+
+    previewList.innerHTML = pendingEvergreenSelection.map(kw => `
+        <div style="background:rgba(255,255,255,0.1); border:1px solid rgba(16, 185, 129, 0.3); border-radius:12px; padding:6px 14px; font-size:0.85em; color:#fff; display:flex; align-items:center; gap:10px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+            <span>${kw}</span>
+            <span onclick="removeFromEvergreenPreview('${kw.replace(/'/g, "\\'")}')" style="cursor:pointer; color:#ef4444; font-weight:bold; font-size:1.4em; line-height:1; padding:0 2px;" title="Xóa khỏi danh sách lưu">&times;</span>
+        </div>
+    `).join('');
+    
+    previewArea.classList.remove('hidden');
+    document.getElementById('btn-save-evergreen').onclick = handleSaveEvergreen;
+    document.getElementById('btn-cancel-evergreen').onclick = handleCancelEvergreen;
+}
+
+window.removeFromEvergreenPreview = function(kw) {
+    pendingEvergreenSelection = pendingEvergreenSelection.filter(item => item !== kw);
+    renderEvergreenPreview();
+};
+
+async function handleSaveEvergreen() {
+    if (pendingEvergreenSelection.length === 0) return;
+    
+    const btn = document.getElementById('btn-save-evergreen');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Đang lưu...'; }
+
+    try {
+        await TrendsAPI.saveEvergreen(pendingEvergreenSelection);
+        showSuccess(`Đã lưu ${pendingEvergreenSelection.length} Evergreen Keywords!`);
+        handleCancelEvergreen();
+        renderEvergreenKeywords();
+    } catch (e) {
+        showError(e.message);
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = '💾 Lưu vào danh sách'; }
+    }
+}
+
+function handleCancelEvergreen() {
+    pendingEvergreenSelection = [];
+    const previewArea = document.getElementById('evergreen-import-preview');
+    if (previewArea) previewArea.classList.add('hidden');
+}
+
+window.handleDeleteEvergreen = async function(id) {
+    if (!confirm('Bạn có chắc chắn muốn xóa keyword Evergreen này?')) return;
+    try {
+        await TrendsAPI.deleteEvergreen(id);
+        renderEvergreenKeywords();
+        showSuccess('Đã xóa thành công.');
+    } catch (e) { showError(e.message); }
+};
 
 // ── Handlers ──
 window.handlePinTrend = async function(id) {
