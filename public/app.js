@@ -3328,6 +3328,7 @@ const TrendsAPI = {
     async togglePin(id)           { return API.fetch(`/api/trends/${id}/pin`, { method: 'PATCH' }); },
     async delete(id)              { return API.fetch(`/api/trends/${id}`, { method: 'DELETE' }); },
     async getHolidays(all = false){ return API.fetch(`/api/holidays${all ? '?all=1' : ''}`); },
+    async getUSAHolidays()        { return API.fetch('/api/usa-holidays'); },
     async refresh()               { 
         await renderTrendingNiches(); 
         return { success: true, message: 'Đã cập nhật dữ liệu...' };
@@ -3444,9 +3445,9 @@ async function renderTrendingNiches() {
 
     // ── Fetch data ──
     try {
-        const [keywords, holidays] = await Promise.all([
+        const [keywords, usaHolidays] = await Promise.all([
             TrendsAPI.getAll(),
-            TrendsAPI.getHolidays()
+            TrendsAPI.getUSAHolidays()
         ]);
 
         // ── Render Niche Cards ──
@@ -3473,29 +3474,32 @@ async function renderTrendingNiches() {
                         </div>` : '';
                     
                     return `
-                    <div class="dinoz-premium-list-item" style="display: grid !important; grid-template-columns: 1.5fr 2fr 200px auto !important; gap: 24px !important; align-items: center !important; padding: 16px 24px !important; margin-bottom: 12px !important; border-radius: 16px !important; background: rgba(255,255,255,0.02) !important; border: 1px solid rgba(255,255,255,0.06) !important; backdrop-filter: blur(12px) !important; ${kw.is_pinned ? 'border-color: rgba(251,191,36,0.4) !important; background: rgba(251,191,36,0.04) !important;' : ''}">
-                        <div class="niche-card-header" style="display: flex !important; flex-direction: column !important; align-items: flex-start !important; gap: 8px !important;">
-                            <h4 class="niche-card-title" style="margin: 0 !important; font-size: 1.1em !important; font-weight: 700 !important; color: #f8fafc !important;">${catIcon} ${kw.keyword}</h4>
-                            <span class="niche-card-category" style="font-size: 0.75em !important; padding: 3px 10px !important; background: rgba(255,255,255,0.05) !important; border: 1px solid rgba(255,255,255,0.1) !important; border-radius: 20px !important; color: #94a3b8 !important;">${kw.category}</span>
+                    <div class="dinoz-premium-list-item ${kw.is_pinned ? 'pinned-card' : ''}">
+                        <div class="niche-card-header">
+                            <h4 class="niche-card-title">${catIcon} ${kw.keyword}</h4>
+                            <span class="niche-card-category">${kw.category}</span>
                         </div>
-                        <div class="niche-card-summary" style="font-size: 0.85em !important; color: #94a3b8 !important; font-style: italic !important; line-height: 1.5 !important; overflow: hidden !important; display: -webkit-box !important; -webkit-line-clamp: 3 !important; -webkit-box-orient: vertical !important;">
-                            ${kw.ai_summary || 'Chưa có phân tích AI.'}
+                        
+                        <div class="niche-card-summary">
+                            ${kw.ai_summary || 'Chưa có phân tích AI cho niche này.'}
                         </div>
-                        <div class="heat-bar-wrapper" style="width: 100% !important;">
-                            <div class="heat-bar-header" style="display: flex !important; justify-content: space-between !important; font-size: 0.75em !important; color: #94a3b8 !important; margin-bottom: 6px !important; text-transform: uppercase !important;">
-                                <span>Heat</span>
-                                <span style="color:${heatColor} !important; font-weight: 700 !important;">${kw.heat_score}%</span>
+                        
+                        <div class="heat-bar-wrapper">
+                            <div class="heat-bar-header">
+                                <span>Heat Score</span>
+                                <span style="color:${heatColor}; font-weight: 700;">${kw.heat_score}%</span>
                             </div>
-                            <div class="heat-bar-container" style="height: 6px !important; background: rgba(0,0,0,0.4) !important; border-radius: 10px !important; overflow: hidden !important; position: relative !important;">
-                                <div class="heat-bar-fill" style="height: 100% !important; border-radius: 10px !important; background:${heatColor} !important; width: 0% !important; transition: width 1.5s ease !important;" data-target-width="${kw.heat_score}%"></div>
+                            <div class="heat-bar-container">
+                                <div class="heat-bar-fill" style="background:${heatColor}; width: 0%;" data-target-width="${kw.heat_score}%"></div>
                             </div>
                         </div>
-                        <div class="niche-card-footer" style="display: flex !important; flex-direction: column !important; align-items: flex-end !important; gap: 10px !important; padding-left: 20px !important; border-left: 1px solid rgba(255,255,255,0.06) !important;">
-                            <div class="quick-links-group" style="display: flex !important; gap: 6px !important; flex-wrap: wrap !important; justify-content: flex-end !important;">
+                        
+                        <div class="niche-card-footer">
+                            <div class="quick-links-group">
                                 <a href="${kw.search_url_etsy}" target="_blank" class="trend-link-btn trend-etsy">Etsy</a>
                                 <a href="${kw.search_url_amazon}" target="_blank" class="trend-link-btn trend-amazon">AMZ</a>
                                 <a href="${kw.search_url_pinterest}" target="_blank" class="trend-link-btn trend-pinterest">PIN</a>
-                                <button class="trend-link-btn" onclick="copyToClipboard('${kw.keyword.replace(/'/g,"\\'")}', this)" style="background:rgba(255,255,255,0.06) !important; color: #fff !important;">📋</button>
+                                <button class="trend-link-btn copy-btn" onclick="copyToClipboard('${kw.keyword.replace(/'/g,"\\'")}', this)">📋</button>
                             </div>
                             ${adminCols}
                         </div>
@@ -3527,36 +3531,44 @@ async function renderTrendingNiches() {
             }
         }
 
-        // ── Render Holiday Sidebar ──
+        // ── Render Holiday Sidebar (USA Holiday Countdown from Telegram) ──
         if (holidayList) {
-            if (!holidays || holidays.length === 0) {
-                holidayList.innerHTML = `<p style="text-align:center;opacity:0.5;font-size:0.85em;">Không có ngày lễ trong 3 tháng tới.</p>`;
+            if (!usaHolidays || usaHolidays.length === 0) {
+                holidayList.innerHTML = `<p style="text-align:center;opacity:0.5;font-size:0.85em;">Chưa có dữ liệu từ Telegram. Gửi báo cáo vào group để cập nhật.</p>`;
             } else {
-                const today = new Date().toISOString().split('T')[0];
-                holidayList.innerHTML = holidays.map(h => {
-                    const todayObj = new Date();
-                    todayObj.setHours(0,0,0,0);
-                    const dateObj = new Date(h.date);
-                    const diffTime = dateObj - todayObj;
-                    const daysUntil = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                    
-                    const isPrep = h.prep_start <= today;
-                    const dayNum = dateObj.getDate();
-                    const monthName = dateObj.toLocaleString('en-US', { month: 'short' }).toUpperCase();
-                    const urgentClass = daysUntil <= 14 ? 'urgent' : '';
-                    
+                // Group by priority_group
+                const groups = {};
+                usaHolidays.forEach(h => {
+                    if (!groups[h.priority_group]) groups[h.priority_group] = [];
+                    groups[h.priority_group].push(h);
+                });
+
+                holidayList.innerHTML = Object.entries(groups).map(([groupName, items]) => {
+                    const groupHtml = items.map(h => {
+                        const daysUntil = parseInt(h.days_left);
+                        const urgentClass = daysUntil <= 30 ? 'urgent' : '';
+                        const dateObj = new Date(h.date);
+                        const dayNum = dateObj.getDate();
+                        const monthName = dateObj.toLocaleString('en-US', { month: 'short' }).toUpperCase();
+                        
+                        return `
+                        <div class="holiday-card ${urgentClass}">
+                            <div class="holiday-emoji">🇺🇸</div>
+                            <div class="holiday-details">
+                                <div class="holiday-title">${h.name}</div>
+                                <div class="holiday-date-info">${monthName} ${dayNum} &nbsp;•&nbsp; ${h.date}</div>
+                            </div>
+                            <div class="holiday-countdown-box">
+                                <div class="holiday-countdown-big" style="color:${daysUntil <= 30 ? '#ef4444' : '#10b981'};">${daysUntil <= 0 ? '0' : daysUntil}</div>
+                                <div class="holiday-countdown-label">Ngày</div>
+                            </div>
+                        </div>`;
+                    }).join('');
+
                     return `
-                    <div class="holiday-card ${urgentClass}">
-                        <div class="holiday-emoji">${h.emoji || '🎉'}</div>
-                        <div class="holiday-details">
-                            <div class="holiday-title">${h.name}</div>
-                            <div class="holiday-date-info">${monthName} ${dayNum} &nbsp;•&nbsp; Chuẩn bị từ: ${h.prep_start}</div>
-                            ${isPrep ? `<div class="urgent-badge">⚠️ Bắt đầu thiết kế!</div>` : ''}
-                        </div>
-                        <div class="holiday-countdown-box">
-                            <div class="holiday-countdown-big" style="color:${daysUntil <= 14 ? '#ef4444' : '#10b981'};">${daysUntil <= 0 ? '0' : daysUntil}</div>
-                            <div class="holiday-countdown-label">Ngày</div>
-                        </div>
+                    <div class="holiday-group">
+                        <div class="holiday-group-header">${groupName}</div>
+                        ${groupHtml}
                     </div>`;
                 }).join('');
             }

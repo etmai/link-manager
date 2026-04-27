@@ -173,6 +173,14 @@ async function initDb() {
             content TEXT NOT NULL,
             createdAt TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS usa_holidays (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            date TEXT NOT NULL,
+            days_left INTEGER,
+            priority_group TEXT,
+            updatedAt TEXT NOT NULL
+        );
     `);
 
     // Add columns if they don't exist (Migration)
@@ -659,6 +667,22 @@ app.get('/api/scrape/ebay/:id', authenticateToken, async (req, res) => {
         clearTimeout(timeoutId);
         res.status(500).json({ error: 'Lỗi eBay: ' + error.message });
     }
+});
+
+// USA Holiday Countdown
+app.get('/api/usa-holidays', async (req, res) => {
+    try {
+        const holidays = await db.all('SELECT * FROM usa_holidays ORDER BY date ASC');
+        res.json(holidays);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Trending Keywords Endpoints
+app.get('/api/trending-keywords', async (req, res) => {
+    const rows = await db.all('SELECT * FROM sales_entries ORDER BY date DESC, createdAt DESC');
+    res.json(rows);
 });
 
 // GET: Lấy tất cả sales entries

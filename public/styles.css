@@ -787,6 +787,7 @@ input[type="number"] {
     th, td {
         padding: 10px 8px;
     }
+    
 }
 
 /* ======== WORK SCHEDULE CALENDAR ======== */
@@ -1145,6 +1146,397 @@ select#task-assignee-input option {
     background: rgba(16, 185, 129, 0.2);
     color: #34d399;
 }
+.task-item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 6px;
+}
+
+.task-item-title {
+    font-weight: 600;
+    font-size: 0.95em;
+}
+
+.task-item-desc {
+    font-size: 0.85em;
+    color: var(--text-secondary);
+    margin-bottom: 10px;
+}
+
+.task-item-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.status-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.8em;
+    cursor: pointer;
+    user-select: none;
+}
+
+.status-toggle input {
+    width: 14px;
+    height: 14px;
+}
+
+.task-actions {
+    display: flex;
+    gap: 8px;
+}
+
+@media (max-width: 1100px) {
+    .calendar-wrapper {
+        flex-direction: column;
+    }
+    .task-details-panel {
+        width: 100%;
+        min-width: 0;
+        position: static;
+    }
+}
+
+/* ======== ADMIN & DETAIL STYLES ======== */
+.tag-success {
+    background: rgba(34, 197, 94, 0.2);
+    color: #4ade80;
+    border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.btn-danger {
+    background: rgba(239, 68, 68, 0.2);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.btn-danger:hover {
+    background: #ef4444;
+    color: white;
+}
+
+.task-detail-body .detail-row {
+    padding: 5px 0;
+}
+
+#detail-task-assignee {
+    display: inline-block;
+    padding: 4px 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 20px;
+    font-size: 0.9em;
+}
+
+.task-item {
+    cursor: pointer;
+    transition: transform 0.2s, background 0.2s;
+}
+
+.task-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+    transform: translateX(5px);
+}
+
+.user-tag {
+    font-size: 0.7em;
+    font-weight: 800;
+    padding: 1px 5px;
+    border-radius: 4px;
+    margin-right: 6px;
+    border: 1px solid currentColor;
+    background: rgba(0, 0, 0, 0.2);
+    display: inline-block;
+    vertical-align: middle;
+}
+
+/* Dropdown visibility fixes - High Contrast */
+select#schedule-user-filter, 
+select#task-assignee-input {
+    background-color: #ffffff !important;
+    color: #1e293b !important;
+    border: 1px solid var(--panel-border) !important;
+}
+
+select#schedule-user-filter option,
+select#task-assignee-input option {
+    background-color: #ffffff !important;
+    color: #1e293b !important;
+}
+
+/* Refined Schedule Styles */
+#btn-refresh-schedule {
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+#btn-refresh-schedule:active {
+    transform: scale(0.95);
+}
+
+.task-item-title {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+#detail-task-creator {
+    background: rgba(255, 255, 255, 0.05);
+    padding: 6px 12px;
+    border-radius: 6px;
+    display: inline-block;
+    color: var(--text-secondary);
+}
+
+.user-tag {
+    font-size: 0.7em;
+    padding: 1px 6px;
+    border: 1px solid;
+    border-radius: 4px;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+/* ======== SALES QUANTITY SPINNER ======== */
+.sales-qty-spinner {
+    display: flex;
+    align-items: stretch;
+    height: 42px;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(0, 0, 0, 0.2);
+}
+
+.sales-qty-spinner .qty-btn {
+    width: 36px;
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--text-secondary);
+    border: none;
+    cursor: pointer;
+    font-weight: 700;
+    font-size: 1.2em;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.sales-qty-spinner .qty-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+    color: var(--text-primary);
+}
+
+.sales-qty-spinner .qty-minus:hover {
+    background: rgba(239, 68, 68, 0.2);
+    color: #f87171;
+}
+
+.sales-qty-spinner .qty-plus:hover {
+    background: rgba(16, 185, 129, 0.2);
+    color: #34d399;
+}
+
+.sales-qty-spinner .qty-btn:active {
+    transform: scale(0.92);
+}
+
+.sales-qty-spinner input[type="number"] {
+    flex: 1;
+    min-width: 0;
+    text-align: center;
+    border: none !important;
+    border-left: 1px solid rgba(255, 255, 255, 0.08) !important;
+    border-right: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+.task-item-desc {
+    font-size: 0.85em;
+    color: var(--text-secondary);
+    margin-bottom: 10px;
+}
+
+.task-item-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.status-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.8em;
+    cursor: pointer;
+    user-select: none;
+}
+
+.status-toggle input {
+    width: 14px;
+    height: 14px;
+}
+
+.task-actions {
+    display: flex;
+    gap: 8px;
+}
+
+@media (max-width: 1100px) {
+    .calendar-wrapper {
+        flex-direction: column;
+    }
+    .task-details-panel {
+        width: 100%;
+        min-width: 0;
+        position: static;
+    }
+}
+
+/* ======== ADMIN & DETAIL STYLES ======== */
+.tag-success {
+    background: rgba(34, 197, 94, 0.2);
+    color: #4ade80;
+    border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.btn-danger {
+    background: rgba(239, 68, 68, 0.2);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.btn-danger:hover {
+    background: #ef4444;
+    color: white;
+}
+
+.task-detail-body .detail-row {
+    padding: 5px 0;
+}
+
+#detail-task-assignee {
+    display: inline-block;
+    padding: 4px 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 20px;
+    font-size: 0.9em;
+}
+
+.task-item {
+    cursor: pointer;
+    transition: transform 0.2s, background 0.2s;
+}
+
+.task-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+    transform: translateX(5px);
+}
+
+.user-tag {
+    font-size: 0.7em;
+    font-weight: 800;
+    padding: 1px 5px;
+    border-radius: 4px;
+    margin-right: 6px;
+    border: 1px solid currentColor;
+    background: rgba(0, 0, 0, 0.2);
+    display: inline-block;
+    vertical-align: middle;
+}
+
+/* Dropdown visibility fixes - High Contrast */
+select#schedule-user-filter, 
+select#task-assignee-input {
+    background-color: #ffffff !important;
+    color: #1e293b !important;
+    border: 1px solid var(--panel-border) !important;
+}
+
+select#schedule-user-filter option,
+select#task-assignee-input option {
+    background-color: #ffffff !important;
+    color: #1e293b !important;
+}
+
+/* Refined Schedule Styles */
+#btn-refresh-schedule {
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+#btn-refresh-schedule:active {
+    transform: scale(0.95);
+}
+
+.task-item-title {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+#detail-task-creator {
+    background: rgba(255, 255, 255, 0.05);
+    padding: 6px 12px;
+    border-radius: 6px;
+    display: inline-block;
+    color: var(--text-secondary);
+}
+
+.user-tag {
+    font-size: 0.7em;
+    padding: 1px 6px;
+    border: 1px solid;
+    border-radius: 4px;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+/* ======== SALES QUANTITY SPINNER ======== */
+.sales-qty-spinner {
+    display: flex;
+    align-items: stretch;
+    height: 42px;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(0, 0, 0, 0.2);
+}
+
+.sales-qty-spinner .qty-btn {
+    width: 36px;
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--text-secondary);
+    border: none;
+    cursor: pointer;
+    font-weight: 700;
+    font-size: 1.2em;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.sales-qty-spinner .qty-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+    color: var(--text-primary);
+}
+
+.sales-qty-spinner .qty-minus:hover {
+    background: rgba(239, 68, 68, 0.2);
+    color: #f87171;
+}
+
+.sales-qty-spinner .qty-plus:hover {
+    background: rgba(16, 185, 129, 0.2);
+    color: #34d399;
+}
 
 .sales-qty-spinner .qty-btn:active {
     transform: scale(0.92);
@@ -1162,11 +1554,7 @@ select#task-assignee-input option {
     background: transparent !important;
     font-weight: 700;
     font-size: 1.05em;
-.sales-compact-table th:nth-child(7), .sales-compact-table td:nth-child(7) { min-width: 120px; width: 120px; } /* OrdID */
-.sales-compact-table th:nth-child(8), .sales-compact-table td:nth-child(8) { min-width: 110px; width: 110px; } /* Custom */
-.sales-compact-table th:nth-child(9), .sales-compact-table td:nth-child(9) { min-width: 65px; width: 65px; } /* Size */
-.sales-compact-table th:nth-child(10), .sales-compact-table td:nth-child(10) { min-width: 130px; width: 130px; } /* File */
-.sales-compact-table th:nth-child(11), .sales-compact-table td:nth-child(11) { min-width: 70px; width: 70px; text-align: center; } /* Sale */
+}
 .sales-compact-table th:nth-child(12), .sales-compact-table td:nth-child(12) { min-width: 100px; width: 100px; text-align: center; } /* Actions */
 
 .sales-compact-table td {
@@ -1640,6 +2028,7 @@ select#task-assignee-input option {
 @media (max-width: 1024px) {
     .trending-layout { grid-template-columns: 1fr; }
     .trends-sidebar { order: -1; }
+    
 }
 
 /* ====== TREND QUICK-LINK BUTTONS ====== */
@@ -1661,38 +2050,37 @@ select#task-assignee-input option {
 .trend-etsy    { background: linear-gradient(135deg, #f16521, #d9531e); }
 .trend-amazon  { background: linear-gradient(135deg, #ff9900, #e47911); }
 .trend-pinterest { background: linear-gradient(135deg, #e60023, #c0001c); }
+.copy-btn { background: rgba(255, 255, 255, 0.06) !important; color: #fff !important; }
 
 /* ====== TRENDING NICHES PREMIUM DASHBOARD (CARDS TO LIST) ====== */
-.niche-cards-grid {
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-    margin-top: 15px;
-}
 
-.dinoz-premium-list-item {
-    background: rgba(255, 255, 255, 0.02);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 16px;
-    padding: 16px 24px;
-    position: relative;
-    overflow: hidden;
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s ease, border-color 0.2s ease;
-    
-    /* Horizontal List Layout */
-    display: grid;
-    grid-template-columns: 1.5fr 2fr 200px auto;
-    gap: 24px;
-    align-items: center;
-}
+
+
 
 .dinoz-premium-list-item:hover {
-    transform: translateX(4px);
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4), 0 0 15px rgba(255, 255, 255, 0.02);
-    border-color: rgba(255, 255, 255, 0.15);
+    transform: translateY(-6px);
+    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.5), 0 0 20px rgba(59, 130, 246, 0.1);
+    border-color: rgba(59, 130, 246, 0.4);
     background: rgba(255, 255, 255, 0.04);
+}
+
+.dinoz-premium-list-item.pinned-card {
+    border-color: rgba(251, 191, 36, 0.4);
+    background: rgba(251, 191, 36, 0.04);
+}
+
+.dinoz-premium-list-item.pinned-card::after {
+    content: 'PINNED';
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    font-size: 0.6em;
+    font-weight: 800;
+    color: #fbbf24;
+    background: rgba(251, 191, 36, 0.1);
+    padding: 2px 6px;
+    border-radius: 4px;
+    letter-spacing: 0.5px;
 }
 
 .niche-card-header {
@@ -1704,11 +2092,12 @@ select#task-assignee-input option {
 }
 
 .niche-card-title {
-    font-size: 1.1em;
-    font-weight: 700;
-    color: #f8fafc;
+    font-size: 1.25em;
+    font-weight: 800;
+    color: #ffffff;
     margin: 0;
-    line-height: 1.3;
+    line-height: 1.2;
+    letter-spacing: -0.5px;
 }
 
 .niche-card-category {
@@ -1783,15 +2172,14 @@ select#task-assignee-input option {
 
 .niche-card-footer {
     display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: flex-end;
+    justify-content: space-between;
+    align-items: center;
     gap: 12px;
-    border-top: none;
-    padding-top: 0;
-    margin-top: 0;
-    border-left: 1px solid rgba(255,255,255,0.06);
-    padding-left: 20px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    padding-top: 16px;
+    margin-top: auto;
+    border-left: none;
+    padding-left: 0;
 }
 
 .quick-links-group {
@@ -1802,10 +2190,7 @@ select#task-assignee-input option {
 }
 
 @media (max-width: 1024px) {
-    .dinoz-premium-list-item {
-        grid-template-columns: 1fr;
-        gap: 16px;
-    }
+    
     .niche-card-footer {
         flex-direction: row;
         justify-content: space-between;
@@ -1821,6 +2206,21 @@ select#task-assignee-input option {
 }
 
 /* HOLIDAY CARDS */
+.holiday-group {
+    margin-bottom: 24px;
+}
+.holiday-group-header {
+    font-size: 0.8em;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: #94a3b8;
+    letter-spacing: 0.05em;
+    margin-bottom: 12px;
+    padding-left: 8px;
+    border-left: 3px solid #3b82f6;
+    line-height: 1.4;
+}
+
 .holiday-card {
     background: rgba(255, 255, 255, 0.02);
     border: 1px solid rgba(255, 255, 255, 0.05);
@@ -1910,3 +2310,44 @@ select#task-assignee-input option {
     100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
 }
 
+
+/* ======== TRENDING NICHES - FINAL OVERRIDE ======== */
+.niche-cards-grid {
+    display: grid !important;
+    grid-template-columns: repeat(4, 1fr) !important;
+    gap: 24px !important;
+    margin-top: 24px !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+}
+
+.dinoz-premium-list-item {
+    background: rgba(30, 41, 59, 0.6) !important;
+    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+    border-radius: 16px !important;
+    padding: 20px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 12px !important;
+    transition: all 0.3s ease !important;
+    backdrop-filter: blur(10px) !important;
+    height: 100% !important;
+}
+
+.dinoz-premium-list-item:hover {
+    border-color: var(--accent-primary) !important;
+    transform: translateY(-5px) !important;
+    background: rgba(30, 41, 59, 0.8) !important;
+}
+
+@media (max-width: 1200px) {
+    .niche-cards-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+}
+
+@media (max-width: 768px) {
+    .niche-cards-grid {
+        grid-template-columns: 1fr !important;
+    }
+}

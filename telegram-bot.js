@@ -46,6 +46,47 @@ function initTelegramBot(db) {
                         return;
                     }
 
+                    // Header detection for "BÁO CÁO NGÀY LỆ US"
+                    if (text.toUpperCase().includes('BÁO CÁO NGÀY LỆ US')) {
+                        const lines = text.split('\n');
+                        let currentGroup = 'General';
+                        let addedCount = 0;
+
+                        // Clear old holidays before updating with the new report
+                        await db.run("DELETE FROM usa_holidays");
+
+                        for (const line of lines) {
+                            const trimmed = line.trim();
+                            if (!trimmed) continue;
+
+                            // Detect Priority Group (e.g., [60-90 NGÀY])
+                            if (trimmed.includes('[') && trimmed.includes('NGÀY')) {
+                                currentGroup = trimmed.replace(/[⚠️🌟]/g, '').trim();
+                                continue;
+                            }
+
+                            // Detect Holiday Line: ➡️ Name (YYYY-MM-DD) - Còn X ngày
+                            if (trimmed.includes('➡️')) {
+                                const match = trimmed.match(/➡️\s*(.+)\s*\((\d{4}-\d{2}-\d{2})\)\s*-\s*Còn\s*(\d+)\s*ngày/);
+                                if (match) {
+                                    const [_, name, date, daysLeft] = match;
+                                    const id = randomUUID();
+                                    await db.run(
+                                        `INSERT INTO usa_holidays (id, name, date, days_left, priority_group, updatedAt) 
+                                         VALUES (?, ?, ?, ?, ?, ?)`,
+                                        [id, name.trim(), date, parseInt(daysLeft), currentGroup, new Date().toISOString()]
+                                    );
+                                    addedCount++;
+                                }
+                            }
+                        }
+
+                        if (addedCount > 0) {
+                            botInstance.sendMessage(chatId, `🎉 Đã cập nhật ${addedCount} ngày lễ US mới vào lịch countdown!`);
+                            console.log(`✅ [Telegram] Updated ${addedCount} holidays.`);
+                        }
+                    }
+
                     // Strict header detection for "TỪ KHÓA TÌM KIẾM"
                     if (text.toUpperCase().includes('TỪ KHÓA TÌM KIẾM')) {
                         const lines = text.split('\n');
