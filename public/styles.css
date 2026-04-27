@@ -2050,6 +2050,7 @@ select#task-assignee-input option {
 .trend-etsy    { background: linear-gradient(135deg, #f16521, #d9531e); }
 .trend-amazon  { background: linear-gradient(135deg, #ff9900, #e47911); }
 .trend-pinterest { background: linear-gradient(135deg, #e60023, #c0001c); }
+.trend-cfab      { background: linear-gradient(135deg, #00acc1, #00838f); }
 .copy-btn { background: rgba(255, 255, 255, 0.06) !important; color: #fff !important; }
 
 /* ====== TRENDING NICHES PREMIUM DASHBOARD (CARDS TO LIST) ====== */
@@ -2089,6 +2090,7 @@ select#task-assignee-input option {
     align-items: flex-start;
     gap: 8px;
     margin-bottom: 0;
+    padding-right: 40px;
 }
 
 .niche-card-title {
@@ -2184,9 +2186,69 @@ select#task-assignee-input option {
 
 .quick-links-group {
     display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+}
+
+.quick-links-row {
+    display: flex;
     gap: 6px;
-    flex-wrap: wrap;
-    justify-content: flex-end;
+    width: 100%;
+}
+
+.quick-links-row .trend-link-btn {
+    flex: 1;
+    text-align: center;
+    margin-right: 0;
+}
+
+/* Floating Pin Button */
+.trend-pin-btn-float {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: rgba(15, 23, 42, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 8px;
+    padding: 6px;
+    cursor: pointer;
+    z-index: 10;
+    transition: all 0.2s;
+    backdrop-filter: blur(8px);
+    color: #fff;
+    line-height: 1;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+.trend-pin-btn-float:hover {
+    background: var(--accent-color);
+    border-color: var(--accent-hover);
+    transform: scale(1.1);
+}
+
+/* Inline Copy Button */
+.trend-copy-inline-btn {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 6px;
+    padding: 4px 12px;
+    font-size: 0.72em;
+    color: #94a3b8;
+    cursor: pointer;
+    transition: all 0.2s;
+    width: fit-content;
+    margin-top: 4px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.trend-copy-inline-btn:hover {
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+    border-color: rgba(255, 255, 255, 0.2);
+    transform: translateY(-1px);
+}
 }
 
 @media (max-width: 1024px) {
@@ -2332,6 +2394,7 @@ select#task-assignee-input option {
     transition: all 0.3s ease !important;
     backdrop-filter: blur(10px) !important;
     height: 100% !important;
+    position: relative !important;
 }
 
 .dinoz-premium-list-item:hover {

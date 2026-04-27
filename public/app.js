@@ -3399,10 +3399,11 @@ async function renderTrendingNiches() {
     if (holidayList) holidayList.innerHTML = `<p style="text-align:center;opacity:0.5;font-size:0.85em;">Đang tải...</p>`;
 
     // ── Inject Admin UI (add keyword form) ──
-    if (isAdmin) {
-        const adminPanel = document.getElementById('trends-admin-panel');
-        if (adminPanel) {
-            adminPanel.innerHTML = `
+    const adminPanel = document.getElementById('trends-admin-panel');
+    if (adminPanel) adminPanel.innerHTML = ''; // Always clear for non-admins
+
+    if (isAdmin && adminPanel) {
+        adminPanel.innerHTML = `
                 <div id="trends-event-container">
                     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px;padding:12px 16px;background:rgba(255,255,255,0.03);border-radius:12px;border:1px solid rgba(255,255,255,0.08);">
                         <span style="font-size:0.85em;color:var(--text-secondary);white-space:nowrap;">➕ Thêm keyword thủ công:</span>
@@ -3441,8 +3442,7 @@ async function renderTrendingNiches() {
                 if (e.key === 'Enter') handleAddTrendKeyword(); 
             });
         }
-    }
-
+    
     // ── Fetch data ──
     try {
         const [keywords, usaHolidays] = await Promise.all([
@@ -3467,16 +3467,25 @@ async function renderTrendingNiches() {
                     const catIcon = CATEGORY_ICONS[kw.category] || '✨';
                     const heatColor = getHeatColor(kw.heat_score);
                     const pinIcon = kw.is_pinned ? '📌' : '📍';
-                    const adminCols = isAdmin ? `
-                        <div style="display:flex;gap:4px;">
-                            <button class="btn-small trend-pin-btn" data-id="${kw.id}" title="${kw.is_pinned ? 'Bỏ ghim' : 'Ghim'}" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;padding:4px 8px;cursor:pointer;">${pinIcon}</button>
-                            <button class="btn-small btn-danger trend-delete-btn" data-id="${kw.id}" style="padding:4px 8px;font-size:0.8em;">✕</button>
-                        </div>` : '';
+                    const q = encodeURIComponent(kw.keyword).replace(/%20/g, '+');
+                    const etsyUrl = `https://www.etsy.com/search?q=${q}&order=date_desc`;
+                    const amzUrl = `https://www.amazon.com/s?k=${q}&crid=PZTCPMQK2YK8&sprefix=${encodeURIComponent(kw.keyword.toLowerCase()).replace(/%20/g, '+')}%2Caps%2C134&ref=nb_sb_noss`;
+                    const pinUrl = `https://www.pinterest.com/search/pins/?q=${q}&rs=shopping_filter&filter_location=1&domains=etsy.com&commerce_only=true`;
+                    const cfabUrl = `https://www.creativefabrica.com/search/?query=${encodeURIComponent(kw.keyword)}&sortBy=newest`;
                     
+                    const pinBtn = isAdmin ? `
+                        <button class="trend-pin-btn-float" data-id="${kw.id}" title="${kw.is_pinned ? 'Bỏ ghim' : 'Ghim'}">
+                            ${pinIcon}
+                        </button>` : '';
+
                     return `
                     <div class="dinoz-premium-list-item ${kw.is_pinned ? 'pinned-card' : ''}">
+                        ${pinBtn}
                         <div class="niche-card-header">
-                            <h4 class="niche-card-title">${catIcon} ${kw.keyword}</h4>
+                            <div style="display:flex; flex-direction:column; gap:4px; width:100%;">
+                                <h4 class="niche-card-title">${catIcon} ${kw.keyword}</h4>
+                                <button class="trend-copy-inline-btn" onclick="copyToClipboard('${kw.keyword.replace(/'/g,"\\'")}', this)">📋 Copy Keyword</button>
+                            </div>
                             <span class="niche-card-category">${kw.category}</span>
                         </div>
                         
@@ -3496,19 +3505,23 @@ async function renderTrendingNiches() {
                         
                         <div class="niche-card-footer">
                             <div class="quick-links-group">
-                                <a href="${kw.search_url_etsy}" target="_blank" class="trend-link-btn trend-etsy">Etsy</a>
-                                <a href="${kw.search_url_amazon}" target="_blank" class="trend-link-btn trend-amazon">AMZ</a>
-                                <a href="${kw.search_url_pinterest}" target="_blank" class="trend-link-btn trend-pinterest">PIN</a>
-                                <button class="trend-link-btn copy-btn" onclick="copyToClipboard('${kw.keyword.replace(/'/g,"\\'")}', this)">📋</button>
+                                <div class="quick-links-row">
+                                    <a href="${etsyUrl}" target="_blank" class="trend-link-btn trend-etsy">Etsy</a>
+                                    <a href="${amzUrl}" target="_blank" class="trend-link-btn trend-amazon">AMZ</a>
+                                    <a href="${pinUrl}" target="_blank" class="trend-link-btn trend-pinterest">PIN</a>
+                                </div>
+                                <div class="quick-links-row">
+                                    <a href="${cfabUrl}" target="_blank" class="trend-link-btn trend-cfab">CFab</a>
+                                    ${isAdmin ? `<button class="trend-link-btn btn-danger trend-delete-btn" data-id="${kw.id}">Xóa</button>` : ''}
+                                </div>
                             </div>
-                            ${adminCols}
                         </div>
                     </div>`;
                 }).join('');
 
                 // Add Event Delegation for cards
                 container.onclick = async (e) => {
-                    const pinBtn = e.target.closest('.trend-pin-btn');
+                    const pinBtn = e.target.closest('.trend-pin-btn-float');
                     const deleteBtn = e.target.closest('.trend-delete-btn');
                     
                     if (pinBtn) {

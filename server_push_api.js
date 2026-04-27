@@ -36,9 +36,9 @@ app.post('/api/push/trends', verifyPushSecret, async (req, res) => {
                     kw.heat_score || 50,
                     kw.category || 'general',
                     kw.ai_summary || '',
-                    kw.search_url_etsy || `https://www.etsy.com/search?q=${encodeURIComponent(kw.keyword)}`,
-                    kw.search_url_amazon || `https://www.amazon.com/s?k=${encodeURIComponent(kw.keyword)}`,
-                    kw.search_url_pinterest || `https://www.pinterest.com/search/pins/?q=${encodeURIComponent(kw.keyword)}`,
+                    kw.search_url_etsy || `https://www.etsy.com/search?q=${encodeURIComponent(kw.keyword).replace(/%20/g, '+')}&order=date_desc`,
+                    kw.search_url_amazon || `https://www.amazon.com/s?k=${encodeURIComponent(kw.keyword).replace(/%20/g, '+')}&crid=PZTCPMQK2YK8&sprefix=${encodeURIComponent((kw.keyword||'').toLowerCase()).replace(/%20/g, '+')}%2Caps%2C134&ref=nb_sb_noss`,
+                    kw.search_url_pinterest || `https://www.pinterest.com/search/pins/?q=${encodeURIComponent(kw.keyword).replace(/%20/g, '+')}&rs=shopping_filter&filter_location=1&domains=etsy.com&commerce_only=true`,
                     kw.source || 'google_trends'
                 ]
             );
