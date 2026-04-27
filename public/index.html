@@ -193,7 +193,7 @@
                         <button class="settings-subtab" data-subtab="merchants-panel">🏪 Merchant</button>
                         <button class="settings-subtab" data-subtab="fulfillments-panel">📦 Fulfillment</button>
                         <button class="settings-subtab" data-subtab="categories-panel">🏷️ Category</button>
-                        <button class="settings-subtab" data-subtab="ai-config-panel">🤖 AI Config</button>
+
                     </div>
 
                     <!-- PANEL: ACCOUNTS -->
@@ -300,28 +300,7 @@
                         </div>
                     </div>
 
-                    <!-- PANEL: AI CONFIG -->
-                    <div id="ai-config-panel" class="settings-panel">
-                        <div class="glass-panel">
-                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px;">
-                                <h3 style="margin:0;">🤖 Cấu Hình AI Agent</h3>
-                                <div style="display:flex;gap:8px;align-items:center;">
-                                    <input type="text" id="ai-test-input" placeholder="Test keyword VD: dog mom shirt" style="padding:7px 12px;background:var(--input-bg);border:1px solid var(--border-color);border-radius:8px;color:var(--text-primary);font-size:0.85em;width:220px;">
-                                    <button id="btn-ai-test-all" class="btn-secondary" style="padding:7px 14px;font-size:0.85em;">🧪 Test All</button>
-                                    <button id="btn-ai-save-all" class="btn-primary" style="padding:7px 14px;font-size:0.85em;">💾 Lưu Tất Cả</button>
-                                </div>
-                            </div>
-                            <p style="font-size:0.8em;color:var(--text-secondary);margin-bottom:16px;">API Keys nhạy cảm lưu trong <code>.env</code>. Model & provider cấu hình tại đây và lưu vào database.</p>
-                            <div id="ai-config-table-container">
-                                <p style="text-align:center;color:var(--text-secondary);">⏳ Đang tải cấu hình...</p>
-                            </div>
-                            <!-- Test result area -->
-                            <div id="ai-test-result" class="hidden" style="margin-top:16px;padding:14px;background:rgba(16,185,129,0.07);border:1px solid rgba(16,185,129,0.2);border-radius:10px;">
-                                <div style="font-size:0.8em;color:var(--text-secondary);margin-bottom:6px;" id="ai-test-meta"></div>
-                                <pre id="ai-test-content" style="white-space:pre-wrap;font-size:0.85em;color:var(--text-primary);margin:0;"></pre>
-                            </div>
-                        </div>
-                    </div>
+
                 </div>
             </div>
 
@@ -915,7 +894,7 @@
                 </div>
             </div>
             <div class="input-group">
-                <label style="color: var(--success-color); font-weight: 600;">Danh mục</label>
+                <label>Danh mục</label>
                 <div class="checkbox-group" id="task-categories"></div>
             </div>
 

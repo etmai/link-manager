@@ -446,7 +446,7 @@ function getUserColor(username) {
 }
 
 function getCategoryColor(name) {
-    // Standardize to a premium green theme for all categories
+    // Standardize to a premium green theme for all category BOXES
     return 'rgba(16, 185, 129, 0.2)';
 }
 
@@ -1636,7 +1636,6 @@ function updateTopbar(tabId) {
         renderAccountsTable();
         renderMerchantsTable();
         renderCategoriesFullTable();
-        renderAiConfigSection();
 
     } else if (tabId === 'trending-niches-tab') {
         titleEl.textContent = '🚀 Trending Niches';
@@ -2600,7 +2599,11 @@ function renderDayTasks() {
         const canDelete = canEdit && !(user?.role === 'user' && t.creatorRole === 'admin');
 
         const taskCats = JSON.parse(t.categories || '[]');
-        const catTags = taskCats.map(c => `<span class="tag" style="background:rgba(255,255,255,0.05); color:var(--text-secondary); border:1px solid rgba(255,255,255,0.1); font-size:0.65em; padding:1px 6px; margin-left:5px;">${c}</span>`).join('');
+        const catTags = taskCats.map(c => {
+            const bgColor = getCategoryColor(c);
+            const borderColor = bgColor.replace('0.2', '0.4');
+            return `<span class="tag" style="background:${bgColor}; color:var(--text-primary); border:1px solid ${borderColor}; font-size:0.65em; padding:1px 6px; margin-left:5px; font-weight:600;">${c}</span>`;
+        }).join('');
 
         div.innerHTML = `
             <div class="task-item-header">
@@ -2689,7 +2692,6 @@ window.openTaskDetail = function(id) {
         ? taskCats.map(c => {
             const bgColor = getCategoryColor(c);
             const borderColor = bgColor.replace('0.2', '0.4');
-            const textColor = bgColor.replace('0.2', '1.0').replace('rgba', 'rgb'); // Brighter text
             return `<span class="tag" style="background:${bgColor}; color:var(--text-primary); border:1px solid ${borderColor}; font-size:0.75em; font-weight:600;">${c}</span>`;
         }).join(' ')
         : '<span style="opacity:0.5; font-size:0.8em;">Không có danh mục</span>';
@@ -2701,7 +2703,7 @@ window.openTaskDetail = function(id) {
         catRow = document.createElement('div');
         catRow.id = 'detail-task-categories-row';
         catRow.className = 'detail-row';
-        catRow.innerHTML = `<label style="display:block; font-size: 0.75em; color: var(--success-color); font-weight: 600; margin-bottom: 5px; text-transform: uppercase;">Danh mục</label>
+        catRow.innerHTML = `<label style="display:block; font-size: 0.75em; color: var(--text-secondary); margin-bottom: 5px; text-transform: uppercase;">Danh mục</label>
                             <div id="detail-task-categories"></div>`;
         descRow.parentNode.insertBefore(catRow, descRow.nextSibling);
     }
@@ -3580,227 +3582,4 @@ async function handleRefreshTrends() {
 }
 
 
-// ====== AI CONFIG MODULE ======
 
-const AiConfigAPI = {
-    async getAll()              { return API.fetch('/api/ai-configs'); },
-    async update(purpose, data) { return API.fetch(`/api/ai-configs/${purpose}`, { method: 'PUT', body: JSON.stringify(data) }); },
-    async test(purpose, input)  { return API.fetch('/api/ai-configs/test', { method: 'POST', body: JSON.stringify({ purpose, test_input: input }) }); },
-};
-
-// Models suggestions per provider
-const PROVIDER_MODELS = {
-    gemini:     ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-2.0-pro-exp'],
-    openai:     ['gpt-4o-mini', 'gpt-4o', 'gpt-3.5-turbo', 'gpt-4-turbo'],
-    groq:       ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'mixtral-8x7b-32768', 'gemma2-9b-it'],
-    anthropic:  ['claude-3-5-haiku-20241022', 'claude-3-5-sonnet-20241022', 'claude-3-opus-20240229'],
-    openrouter: ['google/gemma-3-27b-it:free', 'meta-llama/llama-3.3-70b-instruct:free', 'mistralai/mistral-7b-instruct:free', 'anthropic/claude-3.5-sonnet', 'openai/gpt-4o'],
-    '9router':  ['gpt-4o-mini', 'gpt-4o', 'claude-3-5-sonnet-20241022'],
-    ollama:     ['llama3.2:3b', 'llama3.1:8b', 'mistral:7b', 'gemma2:9b', 'phi3:mini'],
-};
-
-const ENV_KEYS_BY_PROVIDER = {
-    gemini:     'GEMINI_API_KEY',
-    openai:     'OPENAI_API_KEY',
-    groq:       'GROQ_API_KEY',
-    anthropic:  'ANTHROPIC_API_KEY',
-    openrouter: 'OPENROUTER_API_KEY',
-    '9router':  'NINEROUTER_API_KEY',
-    ollama:     '',
-};
-
-// State: current editing values
-let aiConfigState = {};
-
-async function renderAiConfigSection() {
-    const container = document.getElementById('ai-config-table-container');
-    if (!container) return;
-
-    try {
-        const { configs, providers } = await AiConfigAPI.getAll();
-        aiConfigState = {};
-
-        // Build config table
-        let html = `
-        <table class="modern-table" style="table-layout:fixed;">
-            <colgroup>
-                <col style="width:28%">
-                <col style="width:18%">
-                <col style="width:26%">
-                <col style="width:20%">
-                <col style="width:8%">
-            </colgroup>
-            <thead>
-                <tr>
-                    <th>Tác Vụ</th>
-                    <th>Provider</th>
-                    <th>Model</th>
-                    <th>API Key Env</th>
-                    <th>Bật</th>
-                </tr>
-            </thead>
-            <tbody>`;
-
-        for (const cfg of configs) {
-            aiConfigState[cfg.purpose] = { ...cfg };
-            const providerOptions = Object.keys(providers).map(p =>
-                `<option value="${p}" ${cfg.provider === p ? 'selected' : ''}>${providers[p].label}</option>`
-            ).join('');
-
-            const modelOptions = (PROVIDER_MODELS[cfg.provider] || [cfg.model]).map(m =>
-                `<option value="${m}" ${cfg.model === m ? 'selected' : ''}>${m}</option>`
-            ).join('');
-
-            const providerInfo = providers[cfg.provider];
-            const statusDot = cfg.is_enabled
-                ? `<span style="color:#10b981;font-size:1.2em;" title="Đang bật">●</span>`
-                : `<span style="color:#6b7280;font-size:1.2em;" title="Đã tắt">●</span>`;
-
-            html += `
-            <tr data-purpose="${cfg.purpose}">
-                <td>
-                    <div style="font-weight:600;font-size:0.9em;">${cfg.purpose_label}</div>
-                    <div style="font-size:0.7em;color:var(--text-secondary);margin-top:2px;">${cfg.purpose}</div>
-                    <button class="btn-small" onclick="testAiConfig('${cfg.purpose}')"
-                        style="margin-top:6px;font-size:0.72em;padding:3px 8px;background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.3);border-radius:6px;color:#818cf8;cursor:pointer;">
-                        🧪 Test
-                    </button>
-                </td>
-                <td>
-                    <select class="ai-provider-select" data-purpose="${cfg.purpose}"
-                        onchange="onAiProviderChange(this)"
-                        style="width:100%;padding:6px 8px;background:var(--input-bg);border:1px solid var(--border-color);border-radius:7px;color:var(--text-primary);font-size:0.82em;">
-                        ${providerOptions}
-                    </select>
-                    ${providerInfo?.format === 'openai' && cfg.provider !== 'openai' ? `<div style="font-size:0.65em;color:#6b7280;margin-top:3px;">OpenAI-compat</div>` : ''}
-                </td>
-                <td>
-                    <select class="ai-model-select" data-purpose="${cfg.purpose}"
-                        style="width:100%;padding:6px 8px;background:var(--input-bg);border:1px solid var(--border-color);border-radius:7px;color:var(--text-primary);font-size:0.82em;">
-                        ${modelOptions}
-                    </select>
-                </td>
-                <td>
-                    <input type="text" class="ai-env-input" data-purpose="${cfg.purpose}"
-                        value="${cfg.api_key_env}"
-                        style="width:100%;padding:6px 8px;background:var(--input-bg);border:1px solid var(--border-color);border-radius:7px;color:var(--text-primary);font-size:0.8em;box-sizing:border-box;"
-                        placeholder="ENV_VAR_NAME">
-                    ${cfg.provider === 'ollama' || cfg.provider === '9router'
-                        ? `<div style="font-size:0.65em;color:#10b981;margin-top:2px;">✓ Không cần key</div>`
-                        : `<div style="font-size:0.65em;color:var(--text-secondary);margin-top:2px;">.env key name</div>`}
-                </td>
-                <td style="text-align:center;">
-                    <label class="toggle-switch" style="margin:0 auto;">
-                        <input type="checkbox" class="ai-enabled-check" data-purpose="${cfg.purpose}"
-                            ${cfg.is_enabled ? 'checked' : ''}>
-                        <span class="toggle-slider"></span>
-                    </label>
-                </td>
-            </tr>`;
-        }
-
-        html += `</tbody></table>`;
-
-        // Add custom base_url section
-        html += `
-        <div style="margin-top:16px;padding:12px 14px;background:rgba(255,255,255,0.03);border-radius:10px;border:1px solid rgba(255,255,255,0.07);">
-            <div style="font-size:0.82em;color:var(--text-secondary);margin-bottom:10px;font-weight:600;">🔗 Custom Base URL <span style="font-weight:400;">(tùy chỉnh cho Ollama / 9Router / Self-hosted)</span></div>
-            ${configs.map(cfg => `
-            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;" data-base-purpose="${cfg.purpose}">
-                <span style="font-size:0.78em;color:var(--text-secondary);min-width:140px;">${cfg.purpose_label.replace(/[^\w\s]/g,'').trim() || cfg.purpose}:</span>
-                <input type="text" class="ai-baseurl-input" data-purpose="${cfg.purpose}"
-                    value="${cfg.base_url || ''}"
-                    placeholder="Để trống = dùng URL mặc định của provider"
-                    style="flex:1;padding:5px 10px;background:var(--input-bg);border:1px solid var(--border-color);border-radius:7px;color:var(--text-primary);font-size:0.8em;">
-            </div>`).join('')}
-        </div>`;
-
-        container.innerHTML = html;
-
-        // Wire up save button
-        document.getElementById('btn-ai-save-all')?.addEventListener('click', saveAllAiConfigs);
-        document.getElementById('btn-ai-test-all')?.addEventListener('click', () => {
-            const input = document.getElementById('ai-test-input')?.value?.trim() || 'funny dog mom shirt';
-            configs.forEach(cfg => cfg.is_enabled && testAiConfig(cfg.purpose, input));
-        });
-
-    } catch (e) {
-        if (container) container.innerHTML = `<p style="color:#ef4444;">❌ Lỗi tải AI config: ${e.message}</p>`;
-    }
-}
-
-// Update model dropdown when provider changes
-window.onAiProviderChange = function(selectEl) {
-    const purpose = selectEl.dataset.purpose;
-    const provider = selectEl.value;
-    const row = document.querySelector(`tr[data-purpose="${purpose}"]`);
-    if (!row) return;
-
-    // Update model options
-    const modelSel = row.querySelector('.ai-model-select');
-    const models = PROVIDER_MODELS[provider] || [];
-    modelSel.innerHTML = models.map((m, i) => `<option value="${m}" ${i === 0 ? 'selected' : ''}>${m}</option>`).join('');
-
-    // Update env key suggestion
-    const envInput = row.querySelector('.ai-env-input');
-    const suggestedEnv = ENV_KEYS_BY_PROVIDER[provider] || '';
-    envInput.value = suggestedEnv;
-};
-
-async function saveAllAiConfigs() {
-    const btn = document.getElementById('btn-ai-save-all');
-    if (btn) { btn.disabled = true; btn.textContent = '⏳ Đang lưu...'; }
-
-    const rows = document.querySelectorAll('tr[data-purpose]');
-    let saved = 0, errors = 0;
-
-    for (const row of rows) {
-        const purpose = row.dataset.purpose;
-        const provider  = row.querySelector('.ai-provider-select')?.value || 'gemini';
-        const model     = row.querySelector('.ai-model-select')?.value || '';
-        const api_key_env = row.querySelector('.ai-env-input')?.value?.trim() || '';
-        const is_enabled  = row.querySelector('.ai-enabled-check')?.checked ? 1 : 0;
-        const base_url  = document.querySelector(`.ai-baseurl-input[data-purpose="${purpose}"]`)?.value?.trim() || '';
-
-        try {
-            await AiConfigAPI.update(purpose, { provider, model, api_key_env, is_enabled, base_url, temperature: 0.3, max_tokens: 500 });
-            saved++;
-        } catch(e) {
-            errors++;
-            console.error(`Save AI config ${purpose} failed:`, e.message);
-        }
-    }
-
-    if (btn) { btn.disabled = false; btn.textContent = '💾 Lưu Tất Cả'; }
-    if (errors === 0) showSuccess(`✅ Đã lưu ${saved} cấu hình AI!`);
-    else showError(`Lưu ${saved} thành công, ${errors} lỗi.`);
-}
-
-window.testAiConfig = async function(purpose, input) {
-    const testInput = input || document.getElementById('ai-test-input')?.value?.trim() || 'funny dog mom shirt';
-    const resultDiv  = document.getElementById('ai-test-result');
-    const metaDiv    = document.getElementById('ai-test-meta');
-    const contentPre = document.getElementById('ai-test-content');
-
-    if (resultDiv) {
-        resultDiv.classList.remove('hidden');
-        resultDiv.style.borderColor = 'rgba(99,102,241,0.3)';
-        resultDiv.style.background  = 'rgba(99,102,241,0.05)';
-    }
-    if (metaDiv)    metaDiv.textContent    = `⏳ Đang test "${purpose}" với keyword: "${testInput}"...`;
-    if (contentPre) contentPre.textContent = '';
-
-    try {
-        const res = await AiConfigAPI.test(purpose, testInput);
-        if (resultDiv) {
-            resultDiv.style.borderColor = res.success ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)';
-            resultDiv.style.background  = res.success ? 'rgba(16,185,129,0.07)' : 'rgba(239,68,68,0.07)';
-        }
-        if (metaDiv)    metaDiv.textContent    = `${res.success ? '✅' : '⚠️'} Purpose: ${purpose} | Thời gian: ${res.ms}ms | Input: "${res.input || testInput}"`;
-        if (contentPre) contentPre.textContent = res.response || res.message || 'No response';
-    } catch(e) {
-        if (resultDiv) { resultDiv.style.borderColor = 'rgba(239,68,68,0.3)'; resultDiv.style.background = 'rgba(239,68,68,0.07)'; }
-        if (metaDiv)    metaDiv.textContent    = `❌ Lỗi: ${e.message}`;
-        if (contentPre) contentPre.textContent = '';
-    }
-};
