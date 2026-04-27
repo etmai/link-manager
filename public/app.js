@@ -713,6 +713,9 @@ function setupEventListeners() {
                     msgEl.textContent = '✅ Đã xóa bản ghi thành công!';
                     setTimeout(() => { msgEl.textContent = ''; }, 3000);
                 }
+            } else if (type === 'trend') {
+                await TrendsAPI.delete(id);
+                renderTrendingNiches();
             } else if (['account', 'merchant', 'fulfillment', 'category'].includes(type)) {
                 await confirmUniversalDelete();
             }
@@ -3318,6 +3321,20 @@ async function finSaveEntry() {
     }
 }
 
+// ====== TRENDING NICHES API LAYER ======
+const TrendsAPI = {
+    async getAll()                { return API.fetch('/api/trends'); },
+    async add(keyword, category)  { return API.fetch('/api/trends', { method: 'POST', body: JSON.stringify({ keyword, category }) }); },
+    async togglePin(id)           { return API.fetch(`/api/trends/${id}/pin`, { method: 'PATCH' }); },
+    async delete(id)              { return API.fetch(`/api/trends/${id}`, { method: 'DELETE' }); },
+    async getHolidays(all = false){ return API.fetch(`/api/holidays${all ? '?all=1' : ''}`); },
+    async refresh()               { 
+        await renderTrendingNiches(); 
+        return { success: true, message: 'Đã cập nhật dữ liệu...' };
+    },
+    async refreshHolidays()       { return renderTrendingNiches(); }
+};
+
 function finStartEdit(id) {
     const entry = cachedFinance.find(e => e.id === id);
     if (!entry) return;
@@ -3350,16 +3367,6 @@ async function finDeleteEntry(id) {
 }
 
 
-// ====== TRENDING NICHES API LAYER ======
-const TrendsAPI = {
-    async getAll()                { return API.fetch('/api/trends'); },
-    async add(keyword, category)  { return API.fetch('/api/trends', { method: 'POST', body: JSON.stringify({ keyword, category }) }); },
-    async togglePin(id)           { return API.fetch(`/api/trends/${id}/pin`, { method: 'PATCH' }); },
-    async delete(id)              { return API.fetch(`/api/trends/${id}`, { method: 'DELETE' }); },
-    async refresh()               { return renderTrendingNiches(); },
-    async getHolidays(all = false){ return API.fetch(`/api/holidays${all ? '?all=1' : ''}`); },
-    async refreshHolidays()       { return renderTrendingNiches(); },
-};
 
 // ====== TRENDING NICHES LOGIC ======
 const CATEGORY_ICONS = {
@@ -3395,28 +3402,43 @@ async function renderTrendingNiches() {
         const adminPanel = document.getElementById('trends-admin-panel');
         if (adminPanel) {
             adminPanel.innerHTML = `
-                <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px;padding:12px 16px;background:rgba(255,255,255,0.03);border-radius:12px;border:1px solid rgba(255,255,255,0.08);">
-                    <span style="font-size:0.85em;color:var(--text-secondary);white-space:nowrap;">➕ Thêm keyword thủ công:</span>
-                    <input type="text" id="trend-kw-input" placeholder="VD: Funny Dog Mom Shirt..." style="flex:1;min-width:180px;padding:8px 12px;background:var(--input-bg);border:1px solid var(--border-color);border-radius:8px;color:var(--text-primary);font-size:0.9em;">
-                    <select id="trend-cat-select" style="padding:8px 12px;background:var(--input-bg);border:1px solid var(--border-color);border-radius:8px;color:var(--text-primary);font-size:0.9em;">
-                        <option value="">🤖 AI tự phân loại</option>
-                        <option value="pets">🐾 Pets</option>
-                        <option value="family">👨‍👩‍👧 Family</option>
-                        <option value="hobbies">🎸 Hobbies</option>
-                        <option value="fashion">👗 Fashion</option>
-                        <option value="seasonal">🍂 Seasonal</option>
-                        <option value="humor">😄 Humor</option>
-                        <option value="motivation">💪 Motivation</option>
-                        <option value="patriotic">🇺🇸 Patriotic</option>
-                        <option value="general">✨ General</option>
-                    </select>
-                    <button id="btn-add-trend-kw" class="btn-primary" style="padding:8px 16px;white-space:nowrap;">💾 Thêm</button>
-                    <button id="btn-refresh-trends" class="btn-secondary" style="padding:8px 14px;white-space:nowrap;" title="Fetch dữ liệu mới từ Google Trends">🔄 Refresh</button>
+                <div id="trends-event-container">
+                    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px;padding:12px 16px;background:rgba(255,255,255,0.03);border-radius:12px;border:1px solid rgba(255,255,255,0.08);">
+                        <span style="font-size:0.85em;color:var(--text-secondary);white-space:nowrap;">➕ Thêm keyword thủ công:</span>
+                        <input type="text" id="trend-kw-input" placeholder="VD: Funny Dog Mom Shirt..." style="flex:1;min-width:180px;padding:8px 12px;background:var(--input-bg);border:1px solid var(--border-color);border-radius:8px;color:var(--text-primary);font-size:0.9em;">
+                        <select id="trend-cat-select" style="padding:8px 12px;background:var(--input-bg);border:1px solid var(--border-color);border-radius:8px;color:var(--text-primary);font-size:0.9em;">
+                            <option value="">🤖 AI tự phân loại</option>
+                            <option value="pets">🐾 Pets</option>
+                            <option value="family">👨‍👩‍👧 Family</option>
+                            <option value="hobbies">🎸 Hobbies</option>
+                            <option value="fashion">👗 Fashion</option>
+                            <option value="seasonal">🍂 Seasonal</option>
+                            <option value="humor">😄 Humor</option>
+                            <option value="motivation">💪 Motivation</option>
+                            <option value="patriotic">🇺🇸 Patriotic</option>
+                            <option value="general">✨ General</option>
+                        </select>
+                        <button id="btn-add-trend-kw" class="btn-primary" style="padding:8px 16px;white-space:nowrap;">💾 Thêm</button>
+                        <button id="btn-refresh-trends" class="btn-secondary" style="padding:8px 14px;white-space:nowrap;" title="Fetch dữ liệu mới từ Google Trends">🔄 Refresh</button>
+                    </div>
                 </div>
             `;
-            document.getElementById('btn-add-trend-kw')?.addEventListener('click', handleAddTrendKeyword);
-            document.getElementById('trend-kw-input')?.addEventListener('keydown', e => { if (e.key === 'Enter') handleAddTrendKeyword(); });
-            document.getElementById('btn-refresh-trends')?.addEventListener('click', handleRefreshTrends);
+            
+            const adminPanelContainer = document.getElementById('trends-admin-panel');
+            adminPanelContainer.onclick = async (e) => {
+                const target = e.target.closest('button');
+                if (!target) return;
+                
+                if (target.id === 'btn-add-trend-kw') {
+                    handleAddTrendKeyword();
+                } else if (target.id === 'btn-refresh-trends') {
+                    handleRefreshTrends();
+                }
+            };
+            
+            document.getElementById('trend-kw-input')?.addEventListener('keydown', e => { 
+                if (e.key === 'Enter') handleAddTrendKeyword(); 
+            });
         }
     }
 
@@ -3440,15 +3462,14 @@ async function renderTrendingNiches() {
                 }
 
                 container.innerHTML = keywords.map(kw => {
-                    console.log('[DEBUG] Rendering keyword with premium class:', kw.keyword);
                     const badge = getHeatLabel(kw.heat_score);
                     const catIcon = CATEGORY_ICONS[kw.category] || '✨';
                     const heatColor = getHeatColor(kw.heat_score);
                     const pinIcon = kw.is_pinned ? '📌' : '📍';
                     const adminCols = isAdmin ? `
                         <div style="display:flex;gap:4px;">
-                            <button class="btn-small" onclick="handlePinTrend('${kw.id}')" title="${kw.is_pinned ? 'Bỏ ghim' : 'Ghim'}" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;padding:4px 8px;cursor:pointer;">${pinIcon}</button>
-                            <button class="btn-small btn-danger" onclick="handleDeleteTrend('${kw.id}')" style="padding:4px 8px;font-size:0.8em;">✕</button>
+                            <button class="btn-small trend-pin-btn" data-id="${kw.id}" title="${kw.is_pinned ? 'Bỏ ghim' : 'Ghim'}" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;padding:4px 8px;cursor:pointer;">${pinIcon}</button>
+                            <button class="btn-small btn-danger trend-delete-btn" data-id="${kw.id}" style="padding:4px 8px;font-size:0.8em;">✕</button>
                         </div>` : '';
                     
                     return `
@@ -3480,6 +3501,21 @@ async function renderTrendingNiches() {
                         </div>
                     </div>`;
                 }).join('');
+
+                // Add Event Delegation for cards
+                container.onclick = async (e) => {
+                    const pinBtn = e.target.closest('.trend-pin-btn');
+                    const deleteBtn = e.target.closest('.trend-delete-btn');
+                    
+                    if (pinBtn) {
+                        const id = pinBtn.dataset.id;
+                        await window.handlePinTrend(id);
+                    } else if (deleteBtn) {
+                        const id = deleteBtn.dataset.id;
+                        const keyword = deleteBtn.closest('.dinoz-premium-list-item').querySelector('.niche-card-title').textContent.split(' ').slice(1).join(' ');
+                        window.openDeleteModal('trend', id, keyword);
+                    }
+                };
 
                 // Trigger animation after a slight delay
                 setTimeout(() => {
@@ -3539,14 +3575,7 @@ window.handlePinTrend = async function(id) {
     } catch(e) { showError(e.message); }
 };
 
-window.handleDeleteTrend = async function(id) {
-    if (!confirm('Xóa keyword này?')) return;
-    try {
-        await TrendsAPI.delete(id);
-        showSuccess('Đã xóa keyword!');
-        renderTrendingNiches();
-    } catch(e) { showError(e.message); }
-};
+// handleDeleteTrend is now handled by openDeleteModal and confirmUniversalDelete
 
 async function handleAddTrendKeyword() {
     const input = document.getElementById('trend-kw-input');
