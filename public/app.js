@@ -16,6 +16,13 @@ const API = {
         return data;
     },
 
+    // AI CONFIG
+    async getAIProviders() { return API.fetch('/api/ai/providers'); },
+    async saveAIProvider(data) { return API.fetch('/api/ai/providers', { method: 'POST', body: JSON.stringify(data) }); },
+    async deleteAIProvider(id) { return API.fetch(`/api/ai/providers/${id}`, { method: 'DELETE' }); },
+    async getAISettings() { return API.fetch('/api/ai/settings'); },
+    async saveAISettings(settings) { return API.fetch('/api/ai/settings', { method: 'POST', body: JSON.stringify({ settings }) }); },
+
     // AUTH
     async login(username, password) {
         const res = await fetch('/api/auth/login', {
@@ -186,6 +193,11 @@ let selectedScheduleUser = 'all'; // User đang lọc trên lịch
 function getCurrentUser() {
     const raw = localStorage.getItem('lm_current_user');
     return raw ? JSON.parse(raw) : null;
+}
+
+function isAdminUser() {
+    const user = getCurrentUser();
+    return user && user.role === 'admin';
 }
 
 function setCurrentUser(user) {
@@ -563,6 +575,8 @@ function openModal(element) {
 
 async function closeAllModals() {
     DOM.modalOverlay.classList.add('hidden');
+    const aiModal = document.getElementById('modal-ai-analysis');
+    if (aiModal) aiModal.classList.add('hidden');
     document.querySelectorAll('.modal').forEach(m => m.classList.add('hidden'));
     await loadAppData();
 }
@@ -1135,6 +1149,7 @@ window.handleResetUserPassword = function(username) {
 
 // ====== LOGIC: CATEGORIES ======
 async function addCategory() {
+    if (!isAdminUser()) { showError('Chỉ Admin mới có quyền thêm danh mục!'); return; }
     const val = DOM.newCategoryInput.value.trim();
     if (!val) return;
     try {
@@ -1264,6 +1279,14 @@ async function confirmUniversalDelete() {
                 await API.deleteLink(id);
                 cachedLinks = await API.getLinks();
                 renderAppContent();
+                break;
+            case 'trend':
+                await TrendsAPI.delete(id);
+                await renderTrendingNiches();
+                break;
+            case 'evergreen':
+                await TrendsAPI.deleteEvergreen(id);
+                await renderEvergreenKeywords();
                 break;
         }
         
@@ -1639,6 +1662,7 @@ function updateTopbar(tabId) {
         renderAccountsTable();
         renderMerchantsTable();
         renderCategoriesFullTable();
+        loadAIConfig();
 
     } else if (tabId === 'trending-niches-tab') {
         titleEl.textContent = '🚀 Trending Niches';
@@ -3336,10 +3360,10 @@ const TrendsAPI = {
             body: JSON.stringify({ count })
         });
     },
-    async saveEvergreen(keywords) {
+    async saveEvergreen(keywords, category) {
         return API.fetch('/api/evergreen', {
             method: 'POST',
-            body: JSON.stringify({ keywords })
+            body: JSON.stringify({ keywords, category })
         });
     },
     async deleteEvergreen(id)     {
@@ -3436,7 +3460,7 @@ async function renderTrendingNiches() {
                             <option value="patriotic">🇺🇸 Patriotic</option>
                             <option value="general">✨ General</option>
                         </select>
-                        <button id="btn-add-trend-kw" class="btn-primary" style="padding:8px 16px;white-space:nowrap;">💾 Thêm</button>
+                        <button id="btn-add-trend-kw" class="btn-primary" style="padding:8px 16px;white-space:nowrap;">💾 Thêm Evergreen</button>
                         <button id="btn-refresh-trends" class="btn-secondary" style="padding:8px 14px;white-space:nowrap;" title="Fetch dữ liệu mới từ Google Trends">🔄 Refresh</button>
                     </div>
                 </div>
@@ -3517,7 +3541,13 @@ async function renderTrendingNiches() {
                         <div class="niche-card-header">
                             <div style="display:flex; flex-direction:column; gap:4px; width:100%;">
                                 <h4 class="niche-card-title">${catIcon} ${kw.keyword}</h4>
-                                <button class="trend-copy-inline-btn" onclick="copyToClipboard('${kw.keyword.replace(/'/g,"\\'")}', this)">📋 Copy Keyword</button>
+                                <div class="niche-card-action-row">
+                                    <button class="trend-copy-inline-btn" onclick="copyToClipboard('${kw.keyword.replace(/'/g,"\\'")}', this)">📋 Copy</button>
+                                    <button class="btn-ai-analyze" onclick="handleAnalyzeKeyword('${kw.keyword.replace(/'/g, "\\'")}', 'trending')">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a10 10 0 1 0 10 10H12V2z"/><path d="M12 12L2.1 12.1"/><path d="M12 12l9.9-0.1"/><path d="M12 12V22"/></svg>
+                                        AI Analysis
+                                    </button>
+                                </div>
                             </div>
                             <span class="niche-card-category">${kw.category}</span>
                         </div>
@@ -3653,7 +3683,13 @@ async function renderEvergreenKeywords() {
                 <div class="niche-card-header">
                     <div style="display:flex; flex-direction:column; gap:4px; width:100%;">
                         <h4 class="niche-card-title">🌲 ${kw.keyword}</h4>
-                        <button class="trend-copy-inline-btn" onclick="copyToClipboard('${kw.keyword.replace(/'/g,"\\'")}', this)">📋 Copy Keyword</button>
+                        <div class="niche-card-action-row">
+                            <button class="trend-copy-inline-btn" onclick="copyToClipboard('${kw.keyword.replace(/'/g,"\\'")}', this)">📋 Copy</button>
+                            <button class="btn-ai-analyze" onclick="handleAnalyzeKeyword('${kw.keyword.replace(/'/g, "\\'")}', 'evergreen')">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a10 10 0 1 0 10 10H12V2z"/><path d="M12 12L2.1 12.1"/><path d="M12 12l9.9-0.1"/><path d="M12 12V22"/></svg>
+                                AI Analysis
+                            </button>
+                        </div>
                     </div>
                 </div>
                 
@@ -3666,12 +3702,26 @@ async function renderEvergreenKeywords() {
                         </div>
                         <div class="quick-links-row">
                             <a href="${cfabUrl}" target="_blank" class="trend-link-btn trend-cfab">CFab</a>
-                            ${isAdmin ? `<button class="trend-link-btn btn-danger trend-delete-btn" onclick="handleDeleteEvergreen('${kw.id}')">Xóa</button>` : ''}
+                            ${isAdmin ? `<button class="trend-link-btn btn-danger trend-delete-btn" data-id="${kw.id}">Xóa</button>` : ''}
                         </div>
                     </div>
                 </div>
             </div>`;
         }).join('');
+
+        // Event listener for delete button (delegation)
+        if (!container.dataset.listenerSet) {
+            container.addEventListener('click', (e) => {
+                const deleteBtn = e.target.closest('.trend-delete-btn');
+                if (deleteBtn) {
+                    const id = deleteBtn.dataset.id;
+                    const card = deleteBtn.closest('.dinoz-premium-list-item');
+                    const keyword = card.querySelector('.niche-card-title').textContent.replace('🌲 ', '').trim();
+                    window.openDeleteModal('evergreen', id, keyword);
+                }
+            });
+            container.dataset.listenerSet = 'true';
+        }
 
     } catch (e) {
         container.innerHTML = `<div style="text-align:center;padding:20px;color:#ef4444;width:100%;grid-column: 1 / -1;">❌ Lỗi: ${e.message}</div>`;
@@ -3679,6 +3729,7 @@ async function renderEvergreenKeywords() {
 }
 
 async function handleImportEvergreen() {
+    if (!isAdminUser()) { showError('Bạn không có quyền thực hiện hành động này!'); return; }
     const countInput = document.getElementById('evergreen-import-count');
     const btn = document.getElementById('btn-import-evergreen');
     const count = parseInt(countInput?.value) || 10;
@@ -3735,6 +3786,7 @@ window.removeFromEvergreenPreview = function(kw) {
 };
 
 async function handleSaveEvergreen() {
+    if (!isAdminUser()) { showError('Bạn không có quyền thực hiện hành động này!'); return; }
     if (pendingEvergreenSelection.length === 0) return;
     
     const btn = document.getElementById('btn-save-evergreen');
@@ -3758,14 +3810,7 @@ function handleCancelEvergreen() {
     if (previewArea) previewArea.classList.add('hidden');
 }
 
-window.handleDeleteEvergreen = async function(id) {
-    if (!confirm('Bạn có chắc chắn muốn xóa keyword Evergreen này?')) return;
-    try {
-        await TrendsAPI.deleteEvergreen(id);
-        renderEvergreenKeywords();
-        showSuccess('Đã xóa thành công.');
-    } catch (e) { showError(e.message); }
-};
+// handleDeleteEvergreen is now handled by openDeleteModal and confirmUniversalDelete
 
 // ── Handlers ──
 window.handlePinTrend = async function(id) {
@@ -3778,21 +3823,23 @@ window.handlePinTrend = async function(id) {
 // handleDeleteTrend is now handled by openDeleteModal and confirmUniversalDelete
 
 async function handleAddTrendKeyword() {
+    if (!isAdminUser()) { showError('Bạn không có quyền thực hiện hành động này!'); return; }
     const input = document.getElementById('trend-kw-input');
     const catSel = document.getElementById('trend-cat-select');
     const keyword = (input?.value || '').trim();
     if (!keyword) { showError('Vui lòng nhập keyword!'); return; }
     const btn = document.getElementById('btn-add-trend-kw');
-    if (btn) { btn.disabled = true; btn.textContent = '⏳ Đang phân tích AI...'; }
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Đang lưu...'; }
     try {
-        await TrendsAPI.add(keyword, catSel?.value || '');
+        // Thay đổi: Lưu vào Evergreen với category đã chọn
+        await TrendsAPI.saveEvergreen([keyword], catSel?.value || 'Evergreen');
         if (input) input.value = '';
-        showSuccess(`✅ Đã thêm keyword "${keyword}"!`);
-        renderTrendingNiches();
+        showSuccess(`✅ Đã thêm keyword "${keyword}" vào Evergreen!`);
+        renderEvergreenKeywords(); // Refresh danh sách Evergreen
     } catch(e) {
         showError(e.message);
     } finally {
-        if (btn) { btn.disabled = false; btn.textContent = '💾 Thêm'; }
+        if (btn) { btn.disabled = false; btn.textContent = '💾 Thêm Evergreen'; }
     }
 }
 
@@ -3812,3 +3859,221 @@ async function handleRefreshTrends() {
 
 
 
+async function handleAnalyzeKeyword(keyword, type) {
+    const modal = document.getElementById('modal-ai-analysis');
+    const content = document.getElementById('ai-analysis-content');
+    
+    if (!modal || !content) return;
+    
+    // 1. Show loading
+    content.innerHTML = `
+        <div class="ai-analysis-loading">
+            <div class="loading-spinner" style="margin: 0 auto 20px;"></div>
+            <p style="color: #10b981; font-weight: 500;">🤖 AI đang "não bộ" phân tích niche <strong>"${keyword}"</strong>...</p>
+            <p style="color: var(--text-secondary); font-size: 0.9rem;">Vui lòng đợi trong giây lát.</p>
+        </div>
+    `;
+    openModal(modal);
+
+    try {
+        const response = await fetch('/api/trends/analyze', {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('lm_token')}`
+            },
+            body: JSON.stringify({ keyword, type })
+        });
+
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.error || 'Lỗi phân tích AI');
+        }
+
+        const data = await response.json();
+        renderAnalysisModal(keyword, data.analysis);
+
+    } catch (e) {
+        content.innerHTML = `
+            <div style="text-align:center; padding:40px;">
+                <div style="font-size:3rem; margin-bottom:20px;">❌</div>
+                <h4 style="color:#ef4444; margin-bottom:10px;">Lỗi Phân Tích</h4>
+                <p style="color:var(--text-secondary);">${e.message}</p>
+                <button class="btn-primary" style="margin-top:20px;" onclick="closeAllModals()">Đóng</button>
+            </div>
+        `;
+    }
+}
+
+function renderAnalysisModal(keyword, analysis) {
+    const content = document.getElementById('ai-analysis-content');
+    if (!content) return;
+
+    content.innerHTML = `
+        <div style="margin-bottom: 25px; text-align: center;">
+            <span style="background: rgba(16, 185, 129, 0.1); color: #10b981; padding: 5px 15px; border-radius: 20px; font-weight: bold; font-size: 1.2rem;">
+                ${keyword}
+            </span>
+        </div>
+
+        <div class="ai-section">
+            <div class="ai-section-title">💡 Ý nghĩa Niche</div>
+            <div class="ai-text">${analysis.meaning || 'N/A'}</div>
+        </div>
+
+        <div class="ai-section">
+            <div class="ai-section-title">👥 Đối tượng khách hàng</div>
+            <div class="ai-text">${analysis.audience || 'N/A'}</div>
+        </div>
+
+        <div class="ai-section">
+            <div class="ai-section-title">🎨 Ý tưởng thiết kế</div>
+            <div style="background: rgba(255,255,255,0.03); padding: 15px; border-radius: 12px; border-left: 4px solid #10b981;">
+                ${(analysis.design_ideas || []).map(idea => `
+                    <div class="ai-idea-item">
+                        <span class="ai-idea-bullet">✦</span>
+                        <span style="color: #cbd5e1;">${idea}</span>
+                    </div>
+                `).join('')}
+            </div>
+        </div>
+
+        <div class="ai-section">
+            <div class="ai-section-title">🏷️ Từ khóa liên quan</div>
+            <div class="ai-chip-container">
+                ${(analysis.keywords_related || []).map(kw => `
+                    <span class="ai-chip">${kw}</span>
+                `).join('')}
+            </div>
+        </div>
+
+        <div class="ai-section">
+            <div class="ai-section-title">✨ Gợi ý phong cách</div>
+            <div class="ai-text">${analysis.style_tips || 'N/A'}</div>
+        </div>
+    `;
+}
+
+window.handleAnalyzeKeyword = handleAnalyzeKeyword;
+
+// ====== AI CONFIGURATION LOGIC ======
+let cachedAIProviders = [];
+
+async function loadAIConfig() {
+    try {
+        const [providers, settings] = await Promise.all([
+            API.getAIProviders(),
+            API.getAISettings()
+        ]);
+        cachedAIProviders = providers;
+        renderAIProviders();
+        
+        const promptEl = document.getElementById('ai-system-prompt');
+        if (promptEl && settings.system_prompt) {
+            promptEl.value = settings.system_prompt;
+        }
+    } catch (e) {
+        console.error('Failed to load AI config:', e);
+    }
+}
+
+function renderAIProviders() {
+    const tbody = document.getElementById('ai-providers-table-body');
+    if (!tbody) return;
+    
+    tbody.innerHTML = cachedAIProviders.map(p => `
+        <tr>
+            <td style="text-align:center;"><span class="tag" style="background:var(--accent-color);">${p.priority}</span></td>
+            <td><b>${p.name}</b></td>
+            <td><code>${p.model}</code></td>
+            <td><span style="font-family:monospace; opacity:0.6;">••••••••••••</span></td>
+            <td style="text-align:center;">
+                <span class="tag" style="background:${p.enabled ? '#10b981' : '#64748b'};">
+                    ${p.enabled ? 'Active' : 'Disabled'}
+                </span>
+            </td>
+            <td style="text-align:center;">
+                <button class="btn-text" onclick="openAIProviderModal('${p.id}')">✏️ Sửa</button>
+                <button class="btn-text" style="color:#ef4444;" onclick="deleteAIProvider('${p.id}')">🗑️ Xóa</button>
+            </td>
+        </tr>
+    `).join('');
+
+    if (cachedAIProviders.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:30px; color:var(--text-secondary);">Chưa có AI Provider nào. Vui lòng thêm để sử dụng AI Analysis.</td></tr>';
+    }
+}
+
+window.openAIProviderModal = function(id = null) {
+    const title = document.getElementById('ai-provider-modal-title');
+    const idInput = document.getElementById('ai-provider-id');
+    const nameInput = document.getElementById('ai-provider-name');
+    const modelInput = document.getElementById('ai-provider-model');
+    const keyInput = document.getElementById('ai-provider-key');
+    const priorityInput = document.getElementById('ai-provider-priority');
+    const enabledInput = document.getElementById('ai-provider-enabled');
+
+    if (id) {
+        const p = cachedAIProviders.find(x => x.id === id);
+        if (!p) return;
+        title.textContent = 'Sửa AI Provider';
+        idInput.value = p.id;
+        nameInput.value = p.name;
+        modelInput.value = p.model;
+        keyInput.value = p.apiKey;
+        priorityInput.value = p.priority;
+        enabledInput.checked = !!p.enabled;
+    } else {
+        title.textContent = 'Thêm AI Provider';
+        idInput.value = '';
+        nameInput.value = '';
+        modelInput.value = '';
+        keyInput.value = '';
+        priorityInput.value = 0;
+        enabledInput.checked = true;
+    }
+    
+    openModal(document.getElementById('modal-ai-provider'));
+};
+
+window.saveAIProvider = async function() {
+    const data = {
+        id: document.getElementById('ai-provider-id').value,
+        name: document.getElementById('ai-provider-name').value.trim(),
+        model: document.getElementById('ai-provider-model').value.trim(),
+        apiKey: document.getElementById('ai-provider-key').value.trim(),
+        priority: parseInt(document.getElementById('ai-provider-priority').value) || 0,
+        enabled: document.getElementById('ai-provider-enabled').checked
+    };
+
+    if (!data.name || !data.model || !data.apiKey) {
+        showError('Vui lòng nhập đầy đủ thông tin Provider, Model và API Key!');
+        return;
+    }
+
+    try {
+        await API.saveAIProvider(data);
+        closeAllModals();
+        showSuccess('Đã lưu cấu hình AI Provider thành công.');
+        loadAIConfig();
+    } catch (e) { showError(e.message); }
+};
+
+window.deleteAIProvider = async function(id) {
+    if (!confirm('Bạn có chắc chắn muốn xóa Provider này?')) return;
+    try {
+        await API.deleteAIProvider(id);
+        showSuccess('Đã xóa Provider.');
+        loadAIConfig();
+    } catch (e) { showError(e.message); }
+};
+
+window.saveAISettings = async function() {
+    const prompt = document.getElementById('ai-system-prompt').value.trim();
+    if (!prompt) { showError('System Prompt không được để trống!'); return; }
+    
+    try {
+        await API.saveAISettings({ system_prompt: prompt });
+        showSuccess('Đã lưu System Prompt thành công.');
+    } catch (e) { showError(e.message); }
+};

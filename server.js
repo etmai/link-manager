@@ -47,6 +47,16 @@ const authLimiter = rateLimit({
 });
 app.use('/api/auth/', authLimiter);
 
+// Prevent browser caching for HTML files to ensure updates are visible immediately
+app.use((req, res, next) => {
+    if (req.url === '/' || req.url.endsWith('.html')) {
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+    }
+    next();
+});
+
 // Định tuyến trỏ HTML/CSS/JS thuần từ folder public
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -181,7 +191,35 @@ async function initDb() {
             priority_group TEXT,
             updatedAt TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS ai_providers (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            model TEXT NOT NULL,
+            apiKey TEXT NOT NULL,
+            priority INTEGER DEFAULT 0,
+            enabled INTEGER DEFAULT 1
+        );
+        CREATE TABLE IF NOT EXISTS ai_settings (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        );
     `);
+
+    // Add default system prompt if not exists
+    const existingPrompt = await db.get("SELECT value FROM ai_settings WHERE key = 'system_prompt'");
+    if (!existingPrompt) {
+        const defaultPrompt = `Bạn là một chuyên gia nghiên cứu thị trường Print on Demand (POD) hàng đầu tại Mỹ. Hãy phân tích từ khóa: "{keyword}". Phân tích dựa trên các tiêu chí thẩm mỹ, tâm lý khách hàng Mỹ, và xu hướng thiết kế hiện tại.
+Kết quả trả về phải là một đối tượng JSON hợp lệ với cấu trúc sau:
+{
+  "meaning": "Giải thích ngắn gọn ý nghĩa của ngách này trong văn hóa Mỹ.",
+  "audience": "Mô tả chi tiết chân dung khách hàng (Sở thích, độ tuổi, lý do họ mua sản phẩm này).",
+  "design_ideas": ["Ý tưởng thiết kế 1: chi tiết hình ảnh, text", "Ý tưởng thiết kế 2...", "Ý tưởng thiết kế 3..."],
+  "keywords_related": ["từ khóa SEO 1", "từ khóa SEO 2...", "từ khóa SEO 3..."],
+  "style_tips": "Gợi ý màu sắc, phông chữ (ví dụ: Vintage, Retro, Minimalist) và loại sản phẩm phù hợp nhất (T-shirt, Mug, Poster)."
+}
+Lưu ý: Chỉ trả về JSON duy nhất, không thêm bất kỳ văn bản giải thích nào trước hoặc sau JSON.`;
+        await db.run("INSERT INTO ai_settings (key, value) VALUES ('system_prompt', ?)", [defaultPrompt]);
+    }
 
     // Add columns if they don't exist (Migration)
     const columns = await db.all("PRAGMA table_info(links)");
@@ -1318,7 +1356,8 @@ async function initTrendingTables() {
             id TEXT PRIMARY KEY, keyword TEXT UNIQUE NOT NULL, heat_score INTEGER DEFAULT 50,
             category TEXT DEFAULT 'general', ai_summary TEXT, search_url_etsy TEXT,
             search_url_amazon TEXT, search_url_pinterest TEXT, is_pinned INTEGER DEFAULT 0,
-            source TEXT DEFAULT 'google_trends', fetched_at TEXT DEFAULT CURRENT_TIMESTAMP
+            source TEXT DEFAULT 'google_trends', fetched_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            ai_analysis TEXT
         );
         CREATE TABLE IF NOT EXISTS pod_holidays (
             id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, date TEXT NOT NULL,
@@ -1327,9 +1366,20 @@ async function initTrendingTables() {
         CREATE TABLE IF NOT EXISTS evergreen_keywords (
             id TEXT PRIMARY KEY, keyword TEXT UNIQUE NOT NULL,
             category TEXT, source TEXT DEFAULT 'google_sheet',
-            createdAt TEXT DEFAULT CURRENT_TIMESTAMP
+            createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+            ai_analysis TEXT
         );
     `);
+
+    // Migration for existing tables
+    const trendCols = await db.all("PRAGMA table_info(trending_keywords)");
+    if (!trendCols.map(c => c.name).includes('ai_analysis')) {
+        await db.run("ALTER TABLE trending_keywords ADD COLUMN ai_analysis TEXT");
+    }
+    const everCols = await db.all("PRAGMA table_info(evergreen_keywords)");
+    if (!everCols.map(c => c.name).includes('ai_analysis')) {
+        await db.run("ALTER TABLE evergreen_keywords ADD COLUMN ai_analysis TEXT");
+    }
 }
 
 const verifyPushSecret = (req, res, next) => {
@@ -1464,6 +1514,164 @@ app.post('/api/trends', authenticateToken, requireAdmin, async (req, res) => {
             [id, keyword, category || 'general', 'manual', 90]
         );
         res.json({ success: true, id });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// ====== AI CONFIGURATION ENDPOINTS ======
+app.get('/api/ai/providers', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const providers = await db.all('SELECT * FROM ai_providers ORDER BY priority ASC, name ASC');
+        res.json(providers);
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/ai/providers', authenticateToken, requireAdmin, async (req, res) => {
+    const { id, name, model, apiKey, priority, enabled } = req.body;
+    try {
+        if (id) {
+            await db.run(
+                'UPDATE ai_providers SET name = ?, model = ?, apiKey = ?, priority = ?, enabled = ? WHERE id = ?',
+                [name, model, apiKey, priority, enabled ? 1 : 0, id]
+            );
+            res.json({ success: true });
+        } else {
+            const newId = randomUUID();
+            await db.run(
+                'INSERT INTO ai_providers (id, name, model, apiKey, priority, enabled) VALUES (?, ?, ?, ?, ?, ?)',
+                [newId, name, model, apiKey, priority || 0, enabled ? 1 : 0]
+            );
+            res.json({ success: true, id: newId });
+        }
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/ai/providers/:id', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        await db.run('DELETE FROM ai_providers WHERE id = ?', [req.params.id]);
+        res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/ai/settings', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const settings = await db.all('SELECT * FROM ai_settings');
+        const config = {};
+        settings.forEach(s => config[s.key] = s.value);
+        res.json(config);
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/ai/settings', authenticateToken, requireAdmin, async (req, res) => {
+    const { settings } = req.body; // { key: value }
+    try {
+        for (const [key, value] of Object.entries(settings)) {
+            await db.run('INSERT OR REPLACE INTO ai_settings (key, value) VALUES (?, ?)', [key, value]);
+        }
+        res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// AI NICHE ANALYSIS ENDPOINT
+app.post('/api/trends/analyze', authenticateToken, async (req, res) => {
+    const { keyword, type } = req.body;
+    if (!keyword) return res.status(400).json({ error: 'Thiếu keyword để phân tích!' });
+
+    const tableName = type === 'evergreen' ? 'evergreen_keywords' : 'trending_keywords';
+
+    try {
+        // 1. Check Cache
+        const existing = await db.get(`SELECT ai_analysis FROM ${tableName} WHERE keyword = ?`, [keyword]);
+        if (existing && existing.ai_analysis) {
+            return res.json({ analysis: JSON.parse(existing.ai_analysis), source: 'cache' });
+        }
+
+        // 2. Get AI Config
+        const providers = await db.all('SELECT * FROM ai_providers WHERE enabled = 1 ORDER BY priority ASC');
+        const settings = await db.all('SELECT * FROM ai_settings');
+        const config = {};
+        settings.forEach(s => config[s.key] = s.value);
+        
+        let systemPrompt = config.system_prompt || 'Phân tích niche: "{keyword}"';
+        systemPrompt = systemPrompt.replace('{keyword}', keyword);
+
+        if (providers.length === 0) {
+            throw new Error('Chưa cấu hình AI Provider nào trong Cài Đặt Chung.');
+        }
+
+        // 3. Try each provider (Failover logic)
+        let lastError = null;
+        for (const provider of providers) {
+            try {
+                let apiEndpoint = '';
+                let headers = { 'Content-Type': 'application/json' };
+                let body = {};
+
+                // Map providers to endpoints
+                const name = provider.name.toLowerCase();
+                if (name.includes('gemini')) {
+                    apiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${provider.model}:generateContent?key=${provider.apiKey}`;
+                    body = { contents: [{ parts: [{ text: systemPrompt }] }] };
+                } else if (name.includes('groq')) {
+                    apiEndpoint = 'https://api.groq.com/openai/v1/chat/completions';
+                    headers['Authorization'] = `Bearer ${provider.apiKey}`;
+                    body = { model: provider.model, messages: [{ role: 'user', content: systemPrompt }] };
+                } else if (name.includes('openrouter')) {
+                    apiEndpoint = 'https://openrouter.ai/api/v1/chat/completions';
+                    headers['Authorization'] = `Bearer ${provider.apiKey}`;
+                    body = { model: provider.model, messages: [{ role: 'user', content: systemPrompt }] };
+                } else if (name.includes('deepseek')) {
+                    apiEndpoint = 'https://api.deepseek.com/v1/chat/completions';
+                    headers['Authorization'] = `Bearer ${provider.apiKey}`;
+                    body = { model: provider.model, messages: [{ role: 'user', content: systemPrompt }] };
+                } else {
+                    // Default OpenAI-compatible
+                    apiEndpoint = provider.name.includes('http') ? provider.name : `https://api.${name}.com/v1/chat/completions`;
+                    headers['Authorization'] = `Bearer ${provider.apiKey}`;
+                    body = { model: provider.model, messages: [{ role: 'user', content: systemPrompt }] };
+                }
+
+                const aiRes = await fetch(apiEndpoint, {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify(body),
+                    timeout: 10000
+                });
+
+                if (!aiRes.ok) throw new Error(`HTTP ${aiRes.status}`);
+
+                const data = await aiRes.json();
+                let aiText = '';
+
+                // Extract text based on provider format
+                if (name.includes('gemini')) {
+                    aiText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+                } else {
+                    aiText = data.choices?.[0]?.message?.content || '';
+                }
+
+                if (!aiText) throw new Error('AI không trả về nội dung.');
+
+                const jsonMatch = aiText.match(/\{[\s\S]*\}/);
+                if (!jsonMatch) throw new Error('Định dạng trả về không phải JSON.');
+                
+                const analysis = JSON.parse(jsonMatch[0]);
+
+                // Save to DB
+                await db.run(`UPDATE ${tableName} SET ai_analysis = ? WHERE keyword = ?`, [JSON.stringify(analysis), keyword]);
+
+                return res.json({ analysis, source: provider.name });
+
+            } catch (err) {
+                console.warn(`[AI Failover] Provider ${provider.name} failed:`, err.message);
+                lastError = err;
+                continue; // Try next provider
+            }
+        }
+
+        throw new Error(`Tất cả AI Provider đều thất bại. Lỗi cuối: ${lastError?.message}`);
+
     } catch (e) {
         res.status(500).json({ error: e.message });
     }

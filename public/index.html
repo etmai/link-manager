@@ -193,7 +193,7 @@
                         <button class="settings-subtab" data-subtab="merchants-panel">🏪 Merchant</button>
                         <button class="settings-subtab" data-subtab="fulfillments-panel">📦 Fulfillment</button>
                         <button class="settings-subtab" data-subtab="categories-panel">🏷️ Category</button>
-
+                        <button class="settings-subtab" data-subtab="ai-panel">🤖 AI Config</button>
                     </div>
 
                     <!-- PANEL: ACCOUNTS -->
@@ -296,6 +296,47 @@
                                     <thead><tr><th>Tên Category</th><th style="width: 140px; text-align: right;">Hành Động</th></tr></thead>
                                     <tbody id="categories-table-body"></tbody>
                                 </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- PANEL: AI CONFIG -->
+                    <div id="ai-panel" class="settings-panel">
+                        <div class="glass-panel mb-4">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                                <h3 style="margin:0;">🤖 Cấu Hình AI Provider</h3>
+                                <button class="btn-primary" onclick="openAIProviderModal()">+ Thêm Provider</button>
+                            </div>
+                            <p style="font-size:0.85em; color:var(--text-secondary); margin-bottom:15px;">
+                                Hệ thống sẽ sử dụng danh sách Model dưới đây để phân tích Keyword. Nếu Model đầu tiên lỗi, sẽ tự động chuyển sang Model tiếp theo (Failover).
+                            </p>
+                            <div class="table-container">
+                                <table class="modern-table">
+                                    <thead>
+                                        <tr>
+                                            <th style="width:50px;">Ưu tiên</th>
+                                            <th>Provider / Name</th>
+                                            <th>Model ID</th>
+                                            <th>API Key</th>
+                                            <th style="text-align:center;">Trạng thái</th>
+                                            <th style="text-align:center;">Thao tác</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="ai-providers-table-body">
+                                        <!-- Data injected by JS -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <div class="glass-panel">
+                            <h3 style="margin-bottom:15px;">📝 System Prompt (Niche Analysis)</h3>
+                            <p style="font-size:0.85em; color:var(--text-secondary); margin-bottom:10px;">
+                                Sử dụng để định hướng cho AI khi thực hiện "AI Analysis". Bạn có thể sử dụng biến <code>{keyword}</code> để chèn từ khóa cần phân tích.
+                            </p>
+                            <textarea id="ai-system-prompt" rows="12" style="width:100%; padding:15px; border-radius:12px; background:rgba(0,0,0,0.2); border:1px solid var(--panel-border); color:#fff; font-family:monospace; font-size:0.9em; resize:vertical;"></textarea>
+                            <div style="margin-top:15px; display:flex; justify-content:flex-end;">
+                                <button class="btn-primary" onclick="saveAISettings()">Lưu Cấu Hình System Prompt</button>
                             </div>
                         </div>
                     </div>
@@ -599,6 +640,9 @@
                 <div class="content-wrapper trending-layout">
                     <!-- Khu vực 1: Evergreen & Trending Niches -->
                     <div class="trends-main">
+                        <!-- Bảng điều khiển Admin (Thêm tay) - LÊN ĐẦU -->
+                        <div id="trends-admin-panel" style="margin-bottom: 24px;"></div>
+
                         <!-- MỚI: Khu vực Evergreen Keywords (Lên đầu) -->
                         <div class="evergreen-section" style="margin-bottom: 48px;">
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
@@ -634,8 +678,6 @@
                                 </div>
                             </div>
                             
-                            <!-- Bảng điều khiển Admin (Thêm tay) -->
-                            <div id="trends-admin-panel"></div>
                             
                             <!-- GRID CONTAINER: Nơi JS đúc các Niche Cards vào -->
                             <div class="niche-cards-grid" id="trend-cards-container">
@@ -762,6 +804,8 @@
                 </div>
             </div>
             <!-- ===== END TAB: NHẬP THU CHI ===== -->
+
+
             
             <!-- ===== TAB: QUẢN LÝ NGƯỜI DÙNG (Mới) ===== -->
             <div id="users-tab" class="tab-content">
@@ -999,9 +1043,60 @@
                 <button type="button" class="btn-primary" id="btn-toggle-status-from-detail">Đánh dấu hoàn thành</button>
             </div>
         </div>
+
+        <div id="modal-ai-provider" class="modal glass-panel hidden" style="width: 500px;">
+            <h3 id="ai-provider-modal-title">Thêm AI Provider</h3>
+            <input type="hidden" id="ai-provider-id">
+            <div class="input-group">
+                <label>Tên Provider (ví dụ: Gemini, Groq, Deepseek...)</label>
+                <input type="text" id="ai-provider-name" placeholder="Nhập tên..." required autocomplete="off">
+            </div>
+            <div class="input-group">
+                <label>Model ID (ví dụ: gemini-1.5-flash, llama-3-8b-8192...)</label>
+                <input type="text" id="ai-provider-model" placeholder="Nhập model id..." required autocomplete="off">
+            </div>
+            <div class="input-group">
+                <label>API Key</label>
+                <input type="password" id="ai-provider-key" placeholder="Nhập API Key..." required autocomplete="off">
+            </div>
+            <div style="display:flex; gap:15px;">
+                <div class="input-group" style="flex:1;">
+                    <label>Ưu tiên (Số nhỏ chạy trước)</label>
+                    <input type="number" id="ai-provider-priority" value="0">
+                </div>
+                <div class="input-group" style="flex:1; align-self:flex-end; margin-bottom:20px;">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="ai-provider-enabled" checked> Kích hoạt
+                    </label>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn-secondary btn-close-modal">Hủy</button>
+                <button type="button" class="btn-primary" onclick="saveAIProvider()">Lưu Cấu Hình</button>
+            </div>
+        </div>
     </div>
     <!-- Bắt buộc load JS phiên bản mới (Bypass Cache) -->
-    <script src="app.js?v=16.1.0"></script>
+    <!-- Modal: AI Analysis -->
+    <div id="modal-ai-analysis" class="modal-overlay hidden">
+        <div class="modal-content modal-large" style="max-width: 700px; background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(20px); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 16px; overflow: hidden;">
+            <div class="modal-header" style="border-bottom: 1px solid rgba(255,255,255,0.1); padding: 20px;">
+                <h3 style="display: flex; align-items: center; gap: 10px; color: #10b981; margin: 0;">
+                    <span style="font-size: 1.5rem;">🤖</span> AI Niche Analysis
+                </h3>
+                <span class="close-modal" onclick="closeAllModals()">&times;</span>
+            </div>
+            <div id="ai-analysis-content" class="modal-body" style="padding: 20px; max-height: 70vh; overflow-y: auto;">
+                <!-- Content will be injected here -->
+            </div>
+            <div class="modal-footer" style="border-top: 1px solid rgba(255,255,255,0.1); padding: 15px 20px; text-align: right; background: rgba(0,0,0,0.2);">
+                <button class="btn-secondary" onclick="closeAllModals()">Đóng</button>
+            </div>
+        </div>
+    </div>
+
+
+    <script src="app.js?v=16.2.0"></script>
 </body>
 
 </html>
