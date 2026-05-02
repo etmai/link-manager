@@ -21,7 +21,7 @@ module.exports = function (Router, db) {
 
             if (role === 'admin') {
                 const filterUser = req.query.user;
-                if (filterUser) {
+                if (filterUser && filterUser !== 'all') {
                     tasks = await db.workSchedule.findMany({
                         where: { userId: filterUser },
                         orderBy: [{ date: 'asc' }, { createdAt: 'asc' }],
