@@ -16,13 +16,6 @@ const API = {
         return data;
     },
 
-    // AI CONFIG
-    async getAIProviders() { return API.fetch('/api/ai/providers'); },
-    async saveAIProvider(data) { return API.fetch('/api/ai/providers', { method: 'POST', body: JSON.stringify(data) }); },
-    async deleteAIProvider(id) { return API.fetch(`/api/ai/providers/${id}`, { method: 'DELETE' }); },
-    async getAISettings() { return API.fetch('/api/ai/settings'); },
-    async saveAISettings(settings) { return API.fetch('/api/ai/settings', { method: 'POST', body: JSON.stringify({ settings }) }); },
-
     // AUTH
     async login(username, password) {
         const res = await fetch('/api/auth/login', {
@@ -193,11 +186,6 @@ let selectedScheduleUser = 'all'; // User đang lọc trên lịch
 function getCurrentUser() {
     const raw = localStorage.getItem('lm_current_user');
     return raw ? JSON.parse(raw) : null;
-}
-
-function isAdminUser() {
-    const user = getCurrentUser();
-    return user && user.role === 'admin';
 }
 
 function setCurrentUser(user) {
@@ -482,17 +470,33 @@ function showDashboard(user) {
 
     if (user.role === 'admin') {
         DOM.adminMenu.classList.remove('hidden');
-        document.getElementById('nav-settings')?.classList.remove('hidden');
+        document.getElementById('nav-links')?.classList.remove('hidden');
+        document.getElementById('nav-schedule')?.classList.remove('hidden');
+        document.getElementById('nav-samples')?.classList.remove('hidden');
+        document.getElementById('nav-trending-niches')?.classList.remove('hidden');
+        document.getElementById('nav-stats')?.classList.remove('hidden');
         document.getElementById('nav-users')?.classList.remove('hidden');
+
+        document.getElementById('nav-settings')?.classList.remove('hidden');
         document.getElementById('nav-sales')?.classList.remove('hidden');
         document.getElementById('nav-finance')?.classList.remove('hidden');
 
         DOM.adminCalendarFilters?.classList.remove('hidden');
         DOM.assigneeGroup?.classList.remove('hidden');
     } else {
-        DOM.adminMenu.classList.add('hidden');
+        // Standard User
+        DOM.adminMenu.classList.remove('hidden');
+        
+        // Show allowed tabs
+        document.getElementById('nav-links')?.classList.remove('hidden');
+        document.getElementById('nav-schedule')?.classList.remove('hidden');
+        document.getElementById('nav-samples')?.classList.remove('hidden');
+        document.getElementById('nav-trending-niches')?.classList.remove('hidden');
+        document.getElementById('nav-stats')?.classList.remove('hidden');
+        document.getElementById('nav-users')?.classList.remove('hidden'); // For password change
+
+        // Hide restricted tabs
         document.getElementById('nav-settings')?.classList.add('hidden');
-        document.getElementById('nav-users')?.classList.add('hidden');
         document.getElementById('nav-sales')?.classList.add('hidden');
         document.getElementById('nav-finance')?.classList.add('hidden');
 
@@ -500,7 +504,7 @@ function showDashboard(user) {
         DOM.assigneeGroup?.classList.add('hidden');
 
         const activeTab = document.querySelector('.nav-tab.active')?.dataset?.tab;
-        if (['settings-tab', 'sales-tab', 'finance-tab', 'users-tab'].includes(activeTab)) {
+        if (['settings-tab', 'sales-tab', 'finance-tab'].includes(activeTab)) {
             document.querySelector('[data-tab="links-tab"]')?.click();
         }
     }
@@ -575,8 +579,6 @@ function openModal(element) {
 
 async function closeAllModals() {
     DOM.modalOverlay.classList.add('hidden');
-    const aiModal = document.getElementById('modal-ai-analysis');
-    if (aiModal) aiModal.classList.add('hidden');
     document.querySelectorAll('.modal').forEach(m => m.classList.add('hidden'));
     await loadAppData();
 }
@@ -730,6 +732,9 @@ function setupEventListeners() {
             } else if (type === 'trend') {
                 await TrendsAPI.delete(id);
                 renderTrendingNiches();
+            } else if (type === 'evergreen') {
+                await TrendsAPI.deleteEvergreen(id);
+                renderEvergreenKeywords();
             } else if (['account', 'merchant', 'fulfillment', 'category'].includes(type)) {
                 await confirmUniversalDelete();
             }
@@ -1086,23 +1091,74 @@ window.handleDeleteTrelloAttachment = async function(event, taskId, attachmentId
 
 // ====== LOGIC: USERS ======
 async function renderUsersTable() {
-    let users = [];
-    try { users = await API.getUsers(); } catch (err) { showError(err.message); return; }
+    const currentUser = getCurrentUser();
+    const isAdmin = currentUser && currentUser.role === 'admin';
+    
+    const adminSection = document.getElementById('admin-user-section');
+    const profileSection = document.getElementById('user-profile-section');
+    
+    if (isAdmin) {
+        if (adminSection) adminSection.classList.remove('hidden');
+        if (profileSection) profileSection.classList.add('hidden');
+        
+        let users = [];
+        try { users = await API.getUsers(); } catch (err) { showError(err.message); return; }
+        
+        const tbody = document.getElementById('users-table-body');
+        if (tbody) {
+            tbody.innerHTML = '';
+            users.forEach(u => {
+                const tr = document.createElement('tr');
+                const roleStr = u.role === 'admin' ? '<span style="color:#f59e0b">Admin</span>' : 'User';
+                tr.innerHTML = `
+                    <td>${u.username}</td><td>${roleStr}</td>
+                    <td style="text-align:center;">
+                        <button class="btn-small btn-edit btn-edit-user" data-username="${u.username}">Sửa</button>
+                        <button class="btn-small btn-danger btn-delete-user" data-username="${u.username}">Xóa</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+    } else {
+        if (adminSection) adminSection.classList.add('hidden');
+        if (profileSection) {
+            profileSection.classList.remove('hidden');
+            
+            // Update profile info
+            const welcomeEl = document.getElementById('user-profile-welcome');
+            const roleBadge = document.getElementById('user-profile-role-badge');
+            const avatarEl = document.getElementById('user-profile-avatar');
+            
+            if (welcomeEl) welcomeEl.textContent = `Chào ${currentUser.username}!`;
+            if (roleBadge) roleBadge.textContent = currentUser.role.toUpperCase();
+            if (avatarEl) avatarEl.textContent = currentUser.username.charAt(0).toUpperCase();
+            
+            // Set up form handler (only once)
+            const form = document.getElementById('tab-self-change-pass-form');
+            if (form && !form.dataset.listenerSet) {
+                form.onsubmit = async (e) => {
+                    e.preventDefault();
+                    const oldP = document.getElementById('tab-old-pass').value;
+                    const newP = document.getElementById('tab-new-pass').value;
+                    const confirmP = document.getElementById('tab-confirm-pass').value;
 
-    const tbody = document.getElementById('users-table-body');
-    tbody.innerHTML = '';
-    users.forEach(u => {
-        const tr = document.createElement('tr');
-        const roleStr = u.role === 'admin' ? '<span style="color:#f59e0b">Admin</span>' : 'User';
-        tr.innerHTML = `
-            <td>${u.username}</td><td>${roleStr}</td>
-            <td style="text-align:center;">
-                <button class="btn-small btn-edit btn-edit-user" data-username="${u.username}">Sửa</button>
-                <button class="btn-small btn-danger btn-delete-user" data-username="${u.username}">Xóa</button>
-            </td>
-        `;
-        tbody.appendChild(tr);
-    });
+                    if (newP !== confirmP) {
+                        return showError('Mật khẩu mới không khớp!');
+                    }
+
+                    try {
+                        await API.changePassword(oldP, newP);
+                        showSuccess('Đổi mật khẩu thành công!');
+                        form.reset();
+                    } catch (err) {
+                        showError(err.message);
+                    }
+                };
+                form.dataset.listenerSet = 'true';
+            }
+        }
+    }
 }
 
 window.handleEditUser = function(username) {
@@ -1149,7 +1205,6 @@ window.handleResetUserPassword = function(username) {
 
 // ====== LOGIC: CATEGORIES ======
 async function addCategory() {
-    if (!isAdminUser()) { showError('Chỉ Admin mới có quyền thêm danh mục!'); return; }
     const val = DOM.newCategoryInput.value.trim();
     if (!val) return;
     try {
@@ -1279,14 +1334,6 @@ async function confirmUniversalDelete() {
                 await API.deleteLink(id);
                 cachedLinks = await API.getLinks();
                 renderAppContent();
-                break;
-            case 'trend':
-                await TrendsAPI.delete(id);
-                await renderTrendingNiches();
-                break;
-            case 'evergreen':
-                await TrendsAPI.deleteEvergreen(id);
-                await renderEvergreenKeywords();
                 break;
         }
         
@@ -1637,6 +1684,8 @@ function updateTopbar(tabId) {
     const titleEl = document.getElementById('topbar-title');
     const statsEl = document.getElementById('topbar-stats');
     const exportBtn = document.getElementById('btn-export-excel');
+    const user = getCurrentUser();
+    const isAdmin = user && user.role === 'admin';
     
     exportBtn.classList.add('hidden');
     statsEl.classList.add('hidden');
@@ -1662,7 +1711,6 @@ function updateTopbar(tabId) {
         renderAccountsTable();
         renderMerchantsTable();
         renderCategoriesFullTable();
-        loadAIConfig();
 
     } else if (tabId === 'trending-niches-tab') {
         titleEl.textContent = '🚀 Trending Niches';
@@ -1671,19 +1719,27 @@ function updateTopbar(tabId) {
         renderTrendingNiches();
     } else if (tabId === 'sales-tab') {
         titleEl.textContent = '🛍️ Nhập Sales';
-        renderSalesTable();
+        loadSalesData().then(() => renderSalesTable());
     } else if (tabId === 'stats-tab') {
         titleEl.textContent = '📊 Thống Kê & Xếp Hạng';
-        renderStatistics();
+        loadSalesData().then(() => renderStatistics());
     } else if (tabId === 'schedule-tab') {
         titleEl.textContent = '📅 Lịch Công Việc';
         loadScheduleData().then(() => renderSchedule());
     } else if (tabId === 'samples-tab') {
         titleEl.textContent = '🔬 Quản Lý Mẫu';
-        renderSamplesTable();
+        API.getSamples().then(data => {
+            cachedSamples = data || [];
+            renderSamplesTable();
+        });
     } else if (tabId === 'finance-tab') {
         titleEl.textContent = '💰 Nhập Thu Chi';
-        renderFinanceTab();
+        if (isAdmin) {
+            API.getFinance().then(data => {
+                cachedFinance = data || [];
+                renderFinanceTab();
+            });
+        }
     } else if (tabId === 'users-tab') {
         titleEl.textContent = '👥 Quản Lý Người Dùng';
         renderUsersTable();
@@ -1705,8 +1761,11 @@ let cachedSales = [];
 async function loadSalesData() {
     try {
         cachedSales = await SalesAPI.getAll();
+        console.log(`[SalesData] Loaded ${cachedSales.length} records.`);
     } catch (err) {
+        console.error('[SalesData] Load failed:', err);
         cachedSales = [];
+        showError('Không thể tải dữ liệu doanh số: ' + err.message);
     }
 }
 
@@ -2036,8 +2095,11 @@ function renderStatistics() {
     const d30 = new Date(today); d30.setDate(today.getDate() - 30);
 
     const thisMonthKey = today.toISOString().slice(0, 7);
+    console.log(`[Stats] Today: ${today.toISOString()}, MonthKey: ${thisMonthKey}`);
 
     const monthSales = cachedSales.filter(s => s.date.startsWith(thisMonthKey));
+    console.log(`[Stats] Filtered ${monthSales.length} records for current month.`);
+    
     const totalUnits = monthSales.reduce((a, s) => a + (s.sales || 0), 0);
     const uniqueSkus = [...new Set(cachedSales.map(s => s.sku))].length;
 
@@ -3360,10 +3422,10 @@ const TrendsAPI = {
             body: JSON.stringify({ count })
         });
     },
-    async saveEvergreen(keywords, category) {
+    async saveEvergreen(keywords) {
         return API.fetch('/api/evergreen', {
             method: 'POST',
-            body: JSON.stringify({ keywords, category })
+            body: JSON.stringify({ keywords })
         });
     },
     async deleteEvergreen(id)     {
@@ -3445,23 +3507,12 @@ async function renderTrendingNiches() {
     if (isAdmin && adminPanel) {
         adminPanel.innerHTML = `
                 <div id="trends-event-container">
-                    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px;padding:12px 16px;background:rgba(255,255,255,0.03);border-radius:12px;border:1px solid rgba(255,255,255,0.08);">
-                        <span style="font-size:0.85em;color:var(--text-secondary);white-space:nowrap;">➕ Thêm keyword thủ công:</span>
+                    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px;padding:12px 16px;background:rgba(16,185,129,0.03);border-radius:12px;border:1px solid rgba(16,185,129,0.1);">
+                        <span style="font-size:0.85em;color:var(--text-secondary);white-space:nowrap;">🌲 Thêm Evergreen thủ công:</span>
                         <input type="text" id="trend-kw-input" placeholder="VD: Funny Dog Mom Shirt..." style="flex:1;min-width:180px;padding:8px 12px;background:var(--input-bg);border:1px solid var(--border-color);border-radius:8px;color:var(--text-primary);font-size:0.9em;">
-                        <select id="trend-cat-select" style="padding:8px 12px;background:var(--input-bg);border:1px solid var(--border-color);border-radius:8px;color:var(--text-primary);font-size:0.9em;">
-                            <option value="">🤖 AI tự phân loại</option>
-                            <option value="pets">🐾 Pets</option>
-                            <option value="family">👨‍👩‍👧 Family</option>
-                            <option value="hobbies">🎸 Hobbies</option>
-                            <option value="fashion">👗 Fashion</option>
-                            <option value="seasonal">🍂 Seasonal</option>
-                            <option value="humor">😄 Humor</option>
-                            <option value="motivation">💪 Motivation</option>
-                            <option value="patriotic">🇺🇸 Patriotic</option>
-                            <option value="general">✨ General</option>
-                        </select>
-                        <button id="btn-add-trend-kw" class="btn-primary" style="padding:8px 16px;white-space:nowrap;">💾 Thêm Evergreen</button>
-                        <button id="btn-refresh-trends" class="btn-secondary" style="padding:8px 14px;white-space:nowrap;" title="Fetch dữ liệu mới từ Google Trends">🔄 Refresh</button>
+                        <button id="btn-add-evergreen-kw" class="btn-primary" style="padding:8px 16px;white-space:nowrap;background:#10b981;border-color:#059669;">💾 Lưu Evergreen</button>
+                        <div style="width:1px; height:24px; background:rgba(255,255,255,0.1); margin: 0 5px;"></div>
+                        <button id="btn-refresh-trends" class="btn-secondary" style="padding:8px 14px;white-space:nowrap;" title="Fetch dữ liệu mới từ Google Trends">🔄 Refresh Trends</button>
                     </div>
                 </div>
             `;
@@ -3471,15 +3522,15 @@ async function renderTrendingNiches() {
                 const target = e.target.closest('button');
                 if (!target) return;
                 
-                if (target.id === 'btn-add-trend-kw') {
-                    handleAddTrendKeyword();
+                if (target.id === 'btn-add-evergreen-kw') {
+                    handleAddEvergreenKeyword();
                 } else if (target.id === 'btn-refresh-trends') {
                     handleRefreshTrends();
                 }
             };
             
             document.getElementById('trend-kw-input')?.addEventListener('keydown', e => { 
-                if (e.key === 'Enter') handleAddTrendKeyword(); 
+                if (e.key === 'Enter') handleAddEvergreenKeyword(); 
             });
         }
 
@@ -3502,10 +3553,17 @@ async function renderTrendingNiches() {
     
     // ── Fetch data ──
     try {
-        const [keywords, usaHolidays] = await Promise.all([
+        const [keywordsRes, usaHolidaysRes] = await Promise.allSettled([
             TrendsAPI.getAll(),
             TrendsAPI.getUSAHolidays()
         ]);
+
+        const keywords = keywordsRes.status === 'fulfilled' ? keywordsRes.value : [];
+        const usaHolidays = usaHolidaysRes.status === 'fulfilled' ? usaHolidaysRes.value : [];
+
+        if (keywordsRes.status === 'rejected' && keywordsRes.reason.message.includes('Admin')) {
+            console.warn('User is not admin, skipping some trending features.');
+        }
 
         // ── Render Niche Cards ──
         if (container) {
@@ -3530,24 +3588,12 @@ async function renderTrendingNiches() {
                     const pinUrl = `https://www.pinterest.com/search/pins/?q=${q}&rs=shopping_filter&filter_location=1&domains=etsy.com&commerce_only=true`;
                     const cfabUrl = `https://www.creativefabrica.com/search/?query=${encodeURIComponent(kw.keyword)}&sortBy=newest`;
                     
-                    const pinBtn = isAdmin ? `
-                        <button class="trend-pin-btn-float" data-id="${kw.id}" title="${kw.is_pinned ? 'Bỏ ghim' : 'Ghim'}">
-                            ${pinIcon}
-                        </button>` : '';
-
                     return `
                     <div class="dinoz-premium-list-item ${kw.is_pinned ? 'pinned-card' : ''}">
-                        ${pinBtn}
                         <div class="niche-card-header">
                             <div style="display:flex; flex-direction:column; gap:4px; width:100%;">
                                 <h4 class="niche-card-title">${catIcon} ${kw.keyword}</h4>
-                                <div class="niche-card-action-row">
-                                    <button class="trend-copy-inline-btn" onclick="copyToClipboard('${kw.keyword.replace(/'/g,"\\'")}', this)">📋 Copy</button>
-                                    <button class="btn-ai-analyze" onclick="handleAnalyzeKeyword('${kw.keyword.replace(/'/g, "\\'")}', 'trending')">
-                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a10 10 0 1 0 10 10H12V2z"/><path d="M12 12L2.1 12.1"/><path d="M12 12l9.9-0.1"/><path d="M12 12V22"/></svg>
-                                        AI Analysis
-                                    </button>
-                                </div>
+                                <button class="trend-copy-inline-btn" onclick="copyToClipboard('${kw.keyword.replace(/'/g,"\\'")}', this)">📋 Copy Keyword</button>
                             </div>
                             <span class="niche-card-category">${kw.category}</span>
                         </div>
@@ -3662,7 +3708,16 @@ async function renderEvergreenKeywords() {
     if (!container) return;
 
     try {
-        const keywords = await TrendsAPI.getEvergreen();
+        let keywords = [];
+        try {
+            keywords = await TrendsAPI.getEvergreen();
+        } catch (e) {
+            if (e.message.includes('Admin')) {
+                console.warn('Evergreen requires higher permissions or is restricted.');
+            } else {
+                throw e;
+            }
+        }
         if (!keywords || keywords.length === 0) {
             container.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-secondary);width:100%;grid-column: 1 / -1;">Chưa có Evergreen keywords nào.</div>`;
             return;
@@ -3683,13 +3738,7 @@ async function renderEvergreenKeywords() {
                 <div class="niche-card-header">
                     <div style="display:flex; flex-direction:column; gap:4px; width:100%;">
                         <h4 class="niche-card-title">🌲 ${kw.keyword}</h4>
-                        <div class="niche-card-action-row">
-                            <button class="trend-copy-inline-btn" onclick="copyToClipboard('${kw.keyword.replace(/'/g,"\\'")}', this)">📋 Copy</button>
-                            <button class="btn-ai-analyze" onclick="handleAnalyzeKeyword('${kw.keyword.replace(/'/g, "\\'")}', 'evergreen')">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a10 10 0 1 0 10 10H12V2z"/><path d="M12 12L2.1 12.1"/><path d="M12 12l9.9-0.1"/><path d="M12 12V22"/></svg>
-                                AI Analysis
-                            </button>
-                        </div>
+                        <button class="trend-copy-inline-btn" onclick="copyToClipboard('${kw.keyword.replace(/'/g,"\\'")}', this)">📋 Copy Keyword</button>
                     </div>
                 </div>
                 
@@ -3702,26 +3751,22 @@ async function renderEvergreenKeywords() {
                         </div>
                         <div class="quick-links-row">
                             <a href="${cfabUrl}" target="_blank" class="trend-link-btn trend-cfab">CFab</a>
-                            ${isAdmin ? `<button class="trend-link-btn btn-danger trend-delete-btn" data-id="${kw.id}">Xóa</button>` : ''}
+                            ${isAdmin ? `<button class="trend-link-btn btn-danger evergreen-delete-btn" data-id="${kw.id}" data-keyword="${kw.keyword.replace(/'/g,"\\'")}">Xóa</button>` : ''}
                         </div>
                     </div>
                 </div>
             </div>`;
         }).join('');
 
-        // Event listener for delete button (delegation)
-        if (!container.dataset.listenerSet) {
-            container.addEventListener('click', (e) => {
-                const deleteBtn = e.target.closest('.trend-delete-btn');
-                if (deleteBtn) {
-                    const id = deleteBtn.dataset.id;
-                    const card = deleteBtn.closest('.dinoz-premium-list-item');
-                    const keyword = card.querySelector('.niche-card-title').textContent.replace('🌲 ', '').trim();
-                    window.openDeleteModal('evergreen', id, keyword);
-                }
-            });
-            container.dataset.listenerSet = 'true';
-        }
+        // Add Event Delegation for Evergreen cards
+        container.onclick = async (e) => {
+            const deleteBtn = e.target.closest('.evergreen-delete-btn');
+            if (deleteBtn) {
+                const id = deleteBtn.dataset.id;
+                const keyword = deleteBtn.dataset.keyword;
+                window.openDeleteModal('evergreen', id, keyword);
+            }
+        };
 
     } catch (e) {
         container.innerHTML = `<div style="text-align:center;padding:20px;color:#ef4444;width:100%;grid-column: 1 / -1;">❌ Lỗi: ${e.message}</div>`;
@@ -3729,7 +3774,6 @@ async function renderEvergreenKeywords() {
 }
 
 async function handleImportEvergreen() {
-    if (!isAdminUser()) { showError('Bạn không có quyền thực hiện hành động này!'); return; }
     const countInput = document.getElementById('evergreen-import-count');
     const btn = document.getElementById('btn-import-evergreen');
     const count = parseInt(countInput?.value) || 10;
@@ -3786,7 +3830,6 @@ window.removeFromEvergreenPreview = function(kw) {
 };
 
 async function handleSaveEvergreen() {
-    if (!isAdminUser()) { showError('Bạn không có quyền thực hiện hành động này!'); return; }
     if (pendingEvergreenSelection.length === 0) return;
     
     const btn = document.getElementById('btn-save-evergreen');
@@ -3822,24 +3865,23 @@ window.handlePinTrend = async function(id) {
 
 // handleDeleteTrend is now handled by openDeleteModal and confirmUniversalDelete
 
-async function handleAddTrendKeyword() {
-    if (!isAdminUser()) { showError('Bạn không có quyền thực hiện hành động này!'); return; }
+async function handleAddEvergreenKeyword() {
     const input = document.getElementById('trend-kw-input');
-    const catSel = document.getElementById('trend-cat-select');
     const keyword = (input?.value || '').trim();
     if (!keyword) { showError('Vui lòng nhập keyword!'); return; }
-    const btn = document.getElementById('btn-add-trend-kw');
+    
+    const btn = document.getElementById('btn-add-evergreen-kw');
     if (btn) { btn.disabled = true; btn.textContent = '⏳ Đang lưu...'; }
+    
     try {
-        // Thay đổi: Lưu vào Evergreen với category đã chọn
-        await TrendsAPI.saveEvergreen([keyword], catSel?.value || 'Evergreen');
+        await TrendsAPI.saveEvergreen([keyword]);
         if (input) input.value = '';
-        showSuccess(`✅ Đã thêm keyword "${keyword}" vào Evergreen!`);
-        renderEvergreenKeywords(); // Refresh danh sách Evergreen
+        showSuccess(`✅ Đã thêm Evergreen keyword "${keyword}"!`);
+        renderEvergreenKeywords();
     } catch(e) {
         showError(e.message);
     } finally {
-        if (btn) { btn.disabled = false; btn.textContent = '💾 Thêm Evergreen'; }
+        if (btn) { btn.disabled = false; btn.textContent = '💾 Lưu Evergreen'; }
     }
 }
 
@@ -3859,221 +3901,3 @@ async function handleRefreshTrends() {
 
 
 
-async function handleAnalyzeKeyword(keyword, type) {
-    const modal = document.getElementById('modal-ai-analysis');
-    const content = document.getElementById('ai-analysis-content');
-    
-    if (!modal || !content) return;
-    
-    // 1. Show loading
-    content.innerHTML = `
-        <div class="ai-analysis-loading">
-            <div class="loading-spinner" style="margin: 0 auto 20px;"></div>
-            <p style="color: #10b981; font-weight: 500;">🤖 AI đang "não bộ" phân tích niche <strong>"${keyword}"</strong>...</p>
-            <p style="color: var(--text-secondary); font-size: 0.9rem;">Vui lòng đợi trong giây lát.</p>
-        </div>
-    `;
-    openModal(modal);
-
-    try {
-        const response = await fetch('/api/trends/analyze', {
-            method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${localStorage.getItem('lm_token')}`
-            },
-            body: JSON.stringify({ keyword, type })
-        });
-
-        if (!response.ok) {
-            const err = await response.json();
-            throw new Error(err.error || 'Lỗi phân tích AI');
-        }
-
-        const data = await response.json();
-        renderAnalysisModal(keyword, data.analysis);
-
-    } catch (e) {
-        content.innerHTML = `
-            <div style="text-align:center; padding:40px;">
-                <div style="font-size:3rem; margin-bottom:20px;">❌</div>
-                <h4 style="color:#ef4444; margin-bottom:10px;">Lỗi Phân Tích</h4>
-                <p style="color:var(--text-secondary);">${e.message}</p>
-                <button class="btn-primary" style="margin-top:20px;" onclick="closeAllModals()">Đóng</button>
-            </div>
-        `;
-    }
-}
-
-function renderAnalysisModal(keyword, analysis) {
-    const content = document.getElementById('ai-analysis-content');
-    if (!content) return;
-
-    content.innerHTML = `
-        <div style="margin-bottom: 25px; text-align: center;">
-            <span style="background: rgba(16, 185, 129, 0.1); color: #10b981; padding: 5px 15px; border-radius: 20px; font-weight: bold; font-size: 1.2rem;">
-                ${keyword}
-            </span>
-        </div>
-
-        <div class="ai-section">
-            <div class="ai-section-title">💡 Ý nghĩa Niche</div>
-            <div class="ai-text">${analysis.meaning || 'N/A'}</div>
-        </div>
-
-        <div class="ai-section">
-            <div class="ai-section-title">👥 Đối tượng khách hàng</div>
-            <div class="ai-text">${analysis.audience || 'N/A'}</div>
-        </div>
-
-        <div class="ai-section">
-            <div class="ai-section-title">🎨 Ý tưởng thiết kế</div>
-            <div style="background: rgba(255,255,255,0.03); padding: 15px; border-radius: 12px; border-left: 4px solid #10b981;">
-                ${(analysis.design_ideas || []).map(idea => `
-                    <div class="ai-idea-item">
-                        <span class="ai-idea-bullet">✦</span>
-                        <span style="color: #cbd5e1;">${idea}</span>
-                    </div>
-                `).join('')}
-            </div>
-        </div>
-
-        <div class="ai-section">
-            <div class="ai-section-title">🏷️ Từ khóa liên quan</div>
-            <div class="ai-chip-container">
-                ${(analysis.keywords_related || []).map(kw => `
-                    <span class="ai-chip">${kw}</span>
-                `).join('')}
-            </div>
-        </div>
-
-        <div class="ai-section">
-            <div class="ai-section-title">✨ Gợi ý phong cách</div>
-            <div class="ai-text">${analysis.style_tips || 'N/A'}</div>
-        </div>
-    `;
-}
-
-window.handleAnalyzeKeyword = handleAnalyzeKeyword;
-
-// ====== AI CONFIGURATION LOGIC ======
-let cachedAIProviders = [];
-
-async function loadAIConfig() {
-    try {
-        const [providers, settings] = await Promise.all([
-            API.getAIProviders(),
-            API.getAISettings()
-        ]);
-        cachedAIProviders = providers;
-        renderAIProviders();
-        
-        const promptEl = document.getElementById('ai-system-prompt');
-        if (promptEl && settings.system_prompt) {
-            promptEl.value = settings.system_prompt;
-        }
-    } catch (e) {
-        console.error('Failed to load AI config:', e);
-    }
-}
-
-function renderAIProviders() {
-    const tbody = document.getElementById('ai-providers-table-body');
-    if (!tbody) return;
-    
-    tbody.innerHTML = cachedAIProviders.map(p => `
-        <tr>
-            <td style="text-align:center;"><span class="tag" style="background:var(--accent-color);">${p.priority}</span></td>
-            <td><b>${p.name}</b></td>
-            <td><code>${p.model}</code></td>
-            <td><span style="font-family:monospace; opacity:0.6;">••••••••••••</span></td>
-            <td style="text-align:center;">
-                <span class="tag" style="background:${p.enabled ? '#10b981' : '#64748b'};">
-                    ${p.enabled ? 'Active' : 'Disabled'}
-                </span>
-            </td>
-            <td style="text-align:center;">
-                <button class="btn-text" onclick="openAIProviderModal('${p.id}')">✏️ Sửa</button>
-                <button class="btn-text" style="color:#ef4444;" onclick="deleteAIProvider('${p.id}')">🗑️ Xóa</button>
-            </td>
-        </tr>
-    `).join('');
-
-    if (cachedAIProviders.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:30px; color:var(--text-secondary);">Chưa có AI Provider nào. Vui lòng thêm để sử dụng AI Analysis.</td></tr>';
-    }
-}
-
-window.openAIProviderModal = function(id = null) {
-    const title = document.getElementById('ai-provider-modal-title');
-    const idInput = document.getElementById('ai-provider-id');
-    const nameInput = document.getElementById('ai-provider-name');
-    const modelInput = document.getElementById('ai-provider-model');
-    const keyInput = document.getElementById('ai-provider-key');
-    const priorityInput = document.getElementById('ai-provider-priority');
-    const enabledInput = document.getElementById('ai-provider-enabled');
-
-    if (id) {
-        const p = cachedAIProviders.find(x => x.id === id);
-        if (!p) return;
-        title.textContent = 'Sửa AI Provider';
-        idInput.value = p.id;
-        nameInput.value = p.name;
-        modelInput.value = p.model;
-        keyInput.value = p.apiKey;
-        priorityInput.value = p.priority;
-        enabledInput.checked = !!p.enabled;
-    } else {
-        title.textContent = 'Thêm AI Provider';
-        idInput.value = '';
-        nameInput.value = '';
-        modelInput.value = '';
-        keyInput.value = '';
-        priorityInput.value = 0;
-        enabledInput.checked = true;
-    }
-    
-    openModal(document.getElementById('modal-ai-provider'));
-};
-
-window.saveAIProvider = async function() {
-    const data = {
-        id: document.getElementById('ai-provider-id').value,
-        name: document.getElementById('ai-provider-name').value.trim(),
-        model: document.getElementById('ai-provider-model').value.trim(),
-        apiKey: document.getElementById('ai-provider-key').value.trim(),
-        priority: parseInt(document.getElementById('ai-provider-priority').value) || 0,
-        enabled: document.getElementById('ai-provider-enabled').checked
-    };
-
-    if (!data.name || !data.model || !data.apiKey) {
-        showError('Vui lòng nhập đầy đủ thông tin Provider, Model và API Key!');
-        return;
-    }
-
-    try {
-        await API.saveAIProvider(data);
-        closeAllModals();
-        showSuccess('Đã lưu cấu hình AI Provider thành công.');
-        loadAIConfig();
-    } catch (e) { showError(e.message); }
-};
-
-window.deleteAIProvider = async function(id) {
-    if (!confirm('Bạn có chắc chắn muốn xóa Provider này?')) return;
-    try {
-        await API.deleteAIProvider(id);
-        showSuccess('Đã xóa Provider.');
-        loadAIConfig();
-    } catch (e) { showError(e.message); }
-};
-
-window.saveAISettings = async function() {
-    const prompt = document.getElementById('ai-system-prompt').value.trim();
-    if (!prompt) { showError('System Prompt không được để trống!'); return; }
-    
-    try {
-        await API.saveAISettings({ system_prompt: prompt });
-        showSuccess('Đã lưu System Prompt thành công.');
-    } catch (e) { showError(e.message); }
-};
