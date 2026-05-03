@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    container_name: dinoz-sale-app
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./database.sqlite:/app/database.sqlite
+      - ./uploads:/app/uploads
+      - ./backups:/app/backups
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DATABASE_URL=file:./database.sqlite
+    restart: always
+
+networks:
+  default:
+    name: dinoz-network

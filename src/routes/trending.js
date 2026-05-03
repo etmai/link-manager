@@ -7,6 +7,8 @@ const { randomUUID } = require('crypto');
 const { fetchWithRedirects } = require('../utils/fetch');
 const { sendMessageToGroup } = require('../../telegram-bot');
 const { Prisma } = require('@prisma/client');
+const { z } = require('zod');
+const logger = require('../utils/logger');
 
 module.exports = function (Router, db) {
 
@@ -24,8 +26,7 @@ module.exports = function (Router, db) {
             });
             res.json(rows);
         } catch (err) {
-            console.error('[Evergreen GET]', err);
-            res.status(500).json({ error: err.message });
+            next(err);
         }
     });
 
@@ -60,8 +61,7 @@ module.exports = function (Router, db) {
 
             res.json({ total_in_sheet: sheetKeywords.length, new_available: newAvailable.length, selection });
         } catch (err) {
-            console.error('[Evergreen Import]', err);
-            res.status(500).json({ error: err.message });
+            next(err);
         }
     });
 
@@ -96,8 +96,7 @@ module.exports = function (Router, db) {
 
             res.json({ added, total: keywords.length });
         } catch (err) {
-            console.error('[Evergreen POST]', err);
-            res.status(500).json({ error: err.message });
+            next(err);
         }
     });
 
@@ -115,8 +114,7 @@ module.exports = function (Router, db) {
             }
             res.json({ deleted: true });
         } catch (err) {
-            console.error('[Evergreen DELETE]', err);
-            res.status(500).json({ error: err.message });
+            next(err);
         }
     });
 
@@ -136,18 +134,19 @@ module.exports = function (Router, db) {
             });
             res.json(rows);
         } catch (err) {
-            console.error('[Trends GET]', err);
-            res.status(500).json({ error: err.message });
+            next(err);
         }
     });
 
     // 6. POST /api/trends — manually add a trending keyword
-    router.post('/api/trends', authenticateToken, requireAdmin, async (req, res) => {
+    router.post('/api/trends', authenticateToken, requireAdmin, async (req, res, next) => {
         try {
-            const { keyword, category } = req.body;
-            if (!keyword) {
-                return res.status(400).json({ error: 'keyword is required.' });
-            }
+            const schema = z.object({
+                keyword: z.string().min(2).max(100),
+                category: z.string().optional().default('general'),
+            });
+
+            const { keyword, category } = schema.parse(req.body);
 
             let added = false;
             try {
@@ -171,8 +170,7 @@ module.exports = function (Router, db) {
 
             res.json({ added, keyword });
         } catch (err) {
-            console.error('[Trends POST]', err);
-            res.status(500).json({ error: err.message });
+            next(err);
         }
     });
 
@@ -194,8 +192,7 @@ module.exports = function (Router, db) {
 
             res.json({ id, is_pinned: !!newPin });
         } catch (err) {
-            console.error('[Trends Pin PATCH]', err);
-            res.status(500).json({ error: err.message });
+            next(err);
         }
     });
 
@@ -213,8 +210,7 @@ module.exports = function (Router, db) {
             }
             res.json({ deleted: true });
         } catch (err) {
-            console.error('[Trends DELETE]', err);
-            res.status(500).json({ error: err.message });
+            next(err);
         }
     });
 
@@ -260,8 +256,7 @@ module.exports = function (Router, db) {
 
             res.json({ received: keywords.length, added });
         } catch (err) {
-            console.error('[Push Trends]', err);
-            res.status(500).json({ error: err.message });
+            next(err);
         }
     });
 

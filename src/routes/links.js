@@ -5,6 +5,7 @@
  */
 const { authenticateToken } = require('../middlewares/auth');
 const { normalizeUrl } = require('../utils/normalizeUrl');
+const { z } = require('zod');
 
 /**
  * Helper: check whether the current user is allowed to modify a link.
@@ -29,23 +30,28 @@ module.exports = function (Router, db) {
     const router = Router();
 
     // GET /api/links — fetch all links
-    router.get('/api/links', authenticateToken, async (req, res) => {
+    router.get('/api/links', authenticateToken, async (req, res, next) => {
         try {
             const rows = await db.link.findMany();
             res.json(rows.map(parseCategories));
         } catch (err) {
-            res.status(500).json({ error: err.message });
+            next(err);
         }
     });
 
     // POST /api/links/batch — batch insert/update links
-    router.post('/api/links/batch', authenticateToken, async (req, res) => {
+    router.post('/api/links/batch', authenticateToken, async (req, res, next) => {
         try {
-            const { linksData, forceSaveCheckbox = false } = req.body;
+            const schema = z.object({
+                linksData: z.array(z.object({
+                    url: z.string().url(),
+                    date: z.string(),
+                    categories: z.array(z.string()).optional().default([]),
+                })).min(1),
+                forceSaveCheckbox: z.boolean().optional().default(false),
+            });
 
-            if (!Array.isArray(linksData) || linksData.length === 0) {
-                return res.status(400).json({ error: 'linksData must be a non-empty array.' });
-            }
+            const { linksData, forceSaveCheckbox } = schema.parse(req.body);
 
             let newCount = 0;
             let updatedCount = 0;
@@ -54,8 +60,6 @@ module.exports = function (Router, db) {
             await db.$transaction(async (tx) => {
                 for (const item of linksData) {
                     const { url, date, categories } = item;
-                    if (!url || !date) continue; // skip malformed entries
-
                     const normalized = normalizeUrl(url);
                     const existing = await tx.link.findFirst({ where: { url: normalized } });
 
@@ -71,8 +75,7 @@ module.exports = function (Router, db) {
                             }
                             if (!Array.isArray(existingCats)) existingCats = [];
 
-                            const newCats = Array.isArray(categories) ? categories : [];
-                            const merged = [...new Set([...existingCats, ...newCats])];
+                            const merged = [...new Set([...existingCats, ...categories])];
 
                             // Only admins (or the creator) can update
                             if (!canModify(req, existing)) {
@@ -90,15 +93,13 @@ module.exports = function (Router, db) {
                             });
                             updatedCount++;
                         }
-                        // If !forceSaveCheckbox we silently skip duplicates
                     } else {
                         // Insert new link
-                        const categoriesStr = JSON.stringify(Array.isArray(categories) ? categories : []);
                         await tx.link.create({
                             data: {
                                 url: normalized,
                                 date,
-                                categories: categoriesStr,
+                                categories: JSON.stringify(categories),
                                 createdAt: new Date().toISOString(),
                                 addedBy: req.user.username,
                             },
@@ -110,25 +111,37 @@ module.exports = function (Router, db) {
 
             res.status(201).json({ newCount, updatedCount, forbiddenCount });
         } catch (err) {
-            res.status(500).json({ error: err.message });
+            next(err);
         }
     });
 
     // PUT /api/links/:id — update a single link
-    router.put('/api/links/:id', authenticateToken, async (req, res) => {
+    router.put('/api/links/:id', authenticateToken, async (req, res, next) => {
         try {
+            const schema = z.object({
+                url: z.string().url().optional(),
+                date: z.string().optional(),
+                categories: z.array(z.string()).optional(),
+            });
+
+            const { url, date, categories } = schema.parse(req.body);
             const { id } = req.params;
-            const { url, date, categories } = req.body;
 
             // Check link exists
             const existing = await db.link.findUnique({ where: { id } });
             if (!existing) {
-                return res.status(404).json({ error: 'Link not found.' });
+                const error = new Error('Link not found.');
+                error.statusCode = 404;
+                error.isPublic = true;
+                throw error;
             }
 
             // Permission check
             if (!canModify(req, existing)) {
-                return res.status(403).json({ error: 'You do not have permission to edit this link.' });
+                const error = new Error('You do not have permission to edit this link.');
+                error.statusCode = 403;
+                error.isPublic = true;
+                throw error;
             }
 
             const normalized = url ? normalizeUrl(url) : existing.url;
@@ -149,30 +162,36 @@ module.exports = function (Router, db) {
             const updated = await db.link.findUnique({ where: { id } });
             res.json(parseCategories(updated));
         } catch (err) {
-            res.status(500).json({ error: err.message });
+            next(err);
         }
     });
 
     // DELETE /api/links/:id — delete a single link
-    router.delete('/api/links/:id', authenticateToken, async (req, res) => {
+    router.delete('/api/links/:id', authenticateToken, async (req, res, next) => {
         try {
             const { id } = req.params;
 
             // Check link exists
             const existing = await db.link.findUnique({ where: { id } });
             if (!existing) {
-                return res.status(404).json({ error: 'Link not found.' });
+                const error = new Error('Link not found.');
+                error.statusCode = 404;
+                error.isPublic = true;
+                throw error;
             }
 
             // Permission check
             if (!canModify(req, existing)) {
-                return res.status(403).json({ error: 'You do not have permission to delete this link.' });
+                const error = new Error('You do not have permission to delete this link.');
+                error.statusCode = 403;
+                error.isPublic = true;
+                throw error;
             }
 
             await db.link.delete({ where: { id } });
             res.json({ message: 'Link deleted.', id });
         } catch (err) {
-            res.status(500).json({ error: err.message });
+            next(err);
         }
     });
 

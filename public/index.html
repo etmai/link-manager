@@ -10,6 +10,7 @@
     <link rel="icon" type="image/png" href="favicon.png">
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
     <!-- ==== MÀN HÌNH ĐĂNG NHẬP ==== -->
@@ -112,7 +113,8 @@
                     <div class="stats" id="topbar-stats">
                         Tổng số: <span id="total-links">0</span> link
                     </div>
-                    <button id="btn-export-excel" class="btn-primary" style="padding: 8px 16px; margin-left: 15px;">⬇️ Xuất Excel (CSV)</button>
+                    <button id="btn-export-csv" class="btn-secondary" style="padding: 8px 16px; margin-left: 15px;">⬇️ CSV</button>
+                    <button id="btn-export-excel" class="btn-primary" style="padding: 8px 16px; margin-left: 10px;">📊 Excel (.xlsx)</button>
                 </div>
             </header>
 
@@ -151,6 +153,11 @@
                             <h4 style="margin-bottom: 12px; color: var(--text-secondary); font-size: 0.85em; text-transform: uppercase;">Lọc theo tháng</h4>
                             <div id="month-stats-container" style="display: flex; gap: 10px; flex-wrap: wrap;"></div>
                         </div>
+                        <div id="bulk-actions-bar" class="bulk-actions-bar hidden">
+                            <span id="selected-count">0 link đã chọn</span>
+                            <button id="btn-bulk-delete" class="btn-danger-small">🗑️ Xóa hàng loạt</button>
+                            <button id="btn-bulk-clear" class="btn-text" style="color:var(--text-secondary);">Hủy</button>
+                        </div>
                         <div class="filter-bar">
                             <input type="text" id="search-input" placeholder="Tìm kiếm link...">
                             <select id="filter-category"><option value="ALL">Tất cả danh mục</option></select>
@@ -165,6 +172,9 @@
                             <table class="modern-table">
                                 <thead>
                                     <tr>
+                                        <th style="width: 40px; text-align: center;">
+                                            <input type="checkbox" id="check-all-links">
+                                        </th>
                                         <th>URL</th>
                                         <th>Ngày Nhập</th>
                                         <th>Người Thêm</th>
@@ -519,17 +529,8 @@
                                 </div>
                             </div>
                         </div>
-                        <div id="sales-chart-wrapper" class="sales-chart-container" style="margin-top: 20px;">
-                            <!-- Y-axis + chart area -->
-                            <div class="sales-chart-inner">
-                                <div class="sales-chart-yaxis" id="sales-chart-yaxis"></div>
-                                <div class="sales-chart-area">
-                                    <div class="sales-chart-grid" id="sales-chart-grid"></div>
-                                    <div id="sales-chart" class="sales-chart-bars"></div>
-                                </div>
-                            </div>
-                            <!-- X-axis labels -->
-                            <div class="sales-chart-xaxis" id="sales-chart-labels"></div>
+                        <div id="sales-chart-wrapper" style="margin-top: 20px; height: 300px; position: relative;">
+                            <canvas id="sales-chart-canvas"></canvas>
                         </div>
                     </div>
                     <div class="form-row" style="align-items:start; gap:20px; flex-wrap:wrap;">
@@ -797,6 +798,14 @@
                             <button type="button" class="btn-secondary hidden" id="btn-cancel-finance-edit">Hủy Sửa</button>
                         </div>
                         <div id="finance-form-msg" style="margin-top: 10px; font-size: 0.9em;"></div>
+                    </div>
+
+                    <!-- Biểu đồ lợi nhuận -->
+                    <div id="finance-chart-section" class="glass-panel" style="margin-bottom: 24px; padding: 20px;">
+                        <h3 style="margin-bottom: 16px;">📈 Biểu Đồ Lợi Nhuận</h3>
+                        <div style="height: 300px; position: relative;">
+                            <canvas id="finance-chart-canvas"></canvas>
+                        </div>
                     </div>
 
                     <!-- Tổng hợp theo tháng -->
@@ -1111,7 +1120,7 @@
         </div>
     </div>
     <!-- Bắt buộc load JS phiên bản mới (Bypass Cache) -->
-    <script src="app.js?v=16.1.0"></script>
+    <script src="app.js?v=16.4.0"></script>
 </body>
 
 </html>

@@ -21,6 +21,7 @@ const { initDatabase } = require('./db/init');
 const { createApp } = require('./app');
 const { initTelegramBot } = require('../telegram-bot');
 const { cleanupExpiredSamples } = require('./jobs/cleanup');
+const { performBackup } = require('./jobs/backup');
 const config = require('./config');
 
 console.log('[BOOT] config.port:', config.port);
@@ -40,6 +41,9 @@ async function startServer() {
         // 3. Start scheduled jobs
         cleanupExpiredSamples(prisma);
         setInterval(() => cleanupExpiredSamples(prisma), 24 * 60 * 60 * 1000);
+        
+        // Initial backup and scheduled backup (handled inside jobs/backup.js)
+        performBackup();
 
         // 4. Start HTTP server
         const server = app.listen(config.port, () => {

@@ -1,0 +1,14 @@
+node_modules
+npm-debug.log
+database.sqlite
+database.sqlite-journal
+*.db
+.env
+.git
+.gitignore
+backups
+uploads
+artifacts
+scratch
+brain
+.gemini

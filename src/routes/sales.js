@@ -3,164 +3,124 @@
  * Uses Prisma ORM with async/await.
  */
 const { authenticateToken, requireAdmin } = require('../middlewares/auth');
+const { z } = require('zod');
+const logger = require('../utils/logger');
 
 module.exports = function (Router, db) {
   const router = Router();
 
   // GET /api/sales — list all sales entries (auth required)
-  router.get('/api/sales', authenticateToken, async (req, res) => {
+  router.get('/api/sales', authenticateToken, async (req, res, next) => {
     try {
       const rows = await db.salesEntry.findMany({
         orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
       });
-      console.log(`[Sales API] User ${req.user.username} fetched ${rows.length} records.`);
+      logger.info(`[Sales API] User ${req.user.username} fetched ${rows.length} records.`);
       return res.json(rows);
     } catch (err) {
-      console.error('Fetch sales error:', err.message);
-      return res.status(500).json({ error: 'Database error' });
+      next(err);
     }
   });
 
   // POST /api/sales — create a sales entry (auth + admin required)
-  router.post('/api/sales', authenticateToken, requireAdmin, async (req, res) => {
-    const fields = [
-      'account', 'fulfillment', 'design_id', 'sku', 'title',
-      'ord_id', 'custom', 'size', 'filename', 'date', 'sales',
-    ];
-
-    const data = {};
-    for (const field of fields) {
-      data[field] = typeof req.body[field] === 'string'
-        ? req.body[field].trim()
-        : req.body[field];
-    }
-
-    if (!data.account || !data.sku || !data.date) {
-      return res.status(400).json({
-        error: 'account, sku, and date are required fields',
-      });
-    }
-
-    data.sku = data.sku.toUpperCase();
-
+  router.post('/api/sales', authenticateToken, requireAdmin, async (req, res, next) => {
     try {
+      const schema = z.object({
+        account: z.string().trim().min(1),
+        fulfillment: z.string().trim().optional().default(''),
+        design_id: z.string().trim().optional().default(''),
+        sku: z.string().trim().min(1).transform(s => s.toUpperCase()),
+        title: z.string().trim().optional().default(''),
+        ord_id: z.string().trim().optional().default(''),
+        custom: z.string().trim().optional().default(''),
+        size: z.string().trim().optional().default('N/A'),
+        filename: z.string().trim().optional().default(''),
+        date: z.string().min(1),
+        sales: z.union([z.number(), z.string()]).transform(v => parseInt(v, 10) || 0),
+      });
+
+      const data = schema.parse(req.body);
+
       const entry = await db.salesEntry.create({
         data: {
-          account: data.account,
+          ...data,
           merchant: '',
           category: '',
-          fulfillment: data.fulfillment || '',
-          design_id: data.design_id || '',
-          sku: data.sku,
-          title: data.title || '',
-          ord_id: data.ord_id || '',
-          custom: data.custom || '',
-          size: data.size || 'N/A',
-          filename: data.filename || '',
-          sales: parseInt(data.sales, 10) || 0,
-          date: data.date,
           createdAt: new Date().toISOString(),
           addedBy: req.user.username,
         },
       });
 
-      return res.status(201).json({
-        id: entry.id,
-        account: entry.account,
-        fulfillment: entry.fulfillment,
-        design_id: entry.design_id,
-        sku: entry.sku,
-        title: entry.title,
-        ord_id: entry.ord_id,
-        custom: entry.custom,
-        size: entry.size,
-        filename: entry.filename,
-        sales: entry.sales,
-        date: entry.date,
-        addedBy: entry.addedBy,
-      });
+      return res.status(201).json(entry);
     } catch (err) {
-      console.error('Insert sales error:', err.message);
-      return res.status(500).json({ error: 'Database error' });
+      next(err);
     }
   });
 
   // PUT /api/sales/:id — update a sales entry (auth + admin required)
-  router.put('/api/sales/:id', authenticateToken, requireAdmin, async (req, res) => {
-    const { id } = req.params;
-
-    const fields = [
-      'account', 'fulfillment', 'design_id', 'sku', 'title',
-      'ord_id', 'custom', 'size', 'filename', 'date', 'sales',
-    ];
-
-    const data = {};
-    for (const field of fields) {
-      data[field] = typeof req.body[field] === 'string'
-        ? req.body[field].trim()
-        : req.body[field];
-    }
-
-    if (!data.account || !data.sku || !data.date) {
-      return res.status(400).json({
-        error: 'account, sku, and date are required fields',
-      });
-    }
-
-    data.sku = data.sku.toUpperCase();
-
+  router.put('/api/sales/:id', authenticateToken, requireAdmin, async (req, res, next) => {
     try {
+      const schema = z.object({
+        account: z.string().trim().min(1),
+        fulfillment: z.string().trim().optional().default(''),
+        design_id: z.string().trim().optional().default(''),
+        sku: z.string().trim().min(1).transform(s => s.toUpperCase()),
+        title: z.string().trim().optional().default(''),
+        ord_id: z.string().trim().optional().default(''),
+        custom: z.string().trim().optional().default(''),
+        size: z.string().trim().optional().default('N/A'),
+        filename: z.string().trim().optional().default(''),
+        date: z.string().min(1),
+        sales: z.union([z.number(), z.string()]).transform(v => parseInt(v, 10) || 0),
+      });
+
+      const data = schema.parse(req.body);
+      const { id } = req.params;
+
       const row = await db.salesEntry.findUnique({ where: { id } });
       if (!row) {
-        return res.status(404).json({ error: 'Sales entry not found' });
+        const error = new Error('Sales entry not found');
+        error.statusCode = 404;
+        error.isPublic = true;
+        throw error;
       }
 
-      await db.salesEntry.update({
+      const updated = await db.salesEntry.update({
         where: { id },
         data: {
-          account: data.account,
+          ...data,
           merchant: '',
           category: '',
-          fulfillment: data.fulfillment || '',
-          design_id: data.design_id || '',
-          sku: data.sku,
-          title: data.title || '',
-          ord_id: data.ord_id || '',
-          custom: data.custom || '',
-          size: data.size || 'N/A',
-          filename: data.filename || '',
-          sales: parseInt(data.sales, 10) || 0,
-          date: data.date,
         },
       });
 
-      return res.json({ id, ...data });
+      return res.json(updated);
     } catch (err) {
-      console.error('Update sales error:', err.message);
-      return res.status(500).json({ error: 'Database error' });
+      next(err);
     }
   });
 
   // DELETE /api/sales/:id — delete a sales entry (auth + admin required)
-  router.delete('/api/sales/:id', authenticateToken, requireAdmin, async (req, res) => {
-    const { id } = req.params;
-
+  router.delete('/api/sales/:id', authenticateToken, requireAdmin, async (req, res, next) => {
     try {
+      const { id } = req.params;
       const row = await db.salesEntry.findUnique({ where: { id } });
       if (!row) {
-        return res.status(404).json({ error: 'Sales entry not found' });
+        const error = new Error('Sales entry not found');
+        error.statusCode = 404;
+        error.isPublic = true;
+        throw error;
       }
 
       await db.salesEntry.delete({ where: { id } });
       return res.json({ message: 'Sales entry deleted successfully', id });
     } catch (err) {
-      console.error('Delete sales error:', err.message);
-      return res.status(500).json({ error: 'Database error' });
+      next(err);
     }
   });
 
   // GET /api/trending-keywords — NO auth required (public)
-  router.get('/api/trending-keywords', async (req, res) => {
+  router.get('/api/trending-keywords', async (req, res, next) => {
     try {
       const rows = await db.trendingKeyword.findMany({
         orderBy: [
@@ -171,8 +131,7 @@ module.exports = function (Router, db) {
       });
       return res.json(rows);
     } catch (err) {
-      console.error('Fetch trending-keywords error:', err.message);
-      return res.status(500).json({ error: 'Database error' });
+      next(err);
     }
   });
 

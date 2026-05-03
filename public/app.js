@@ -268,6 +268,7 @@ const DOM = {
     btnNextPage: document.getElementById('btn-next-page'),
     pageInfo: document.getElementById('page-info'),
 
+    btnExportCsv: document.getElementById('btn-export-csv'),
     btnExportExcel: document.getElementById('btn-export-excel'),
     addLinkForm: document.getElementById('add-link-form'),
     linkUrlsInput: document.getElementById('link-urls'),
@@ -385,25 +386,76 @@ const AI_MODELS_MAP = {
     'NVIDIA NIM': ['nvidia/llama-3.1-nemotron-70b-instruct', 'meta/llama-3.1-405b-instruct', 'mistralai/mixtral-8x7b-instruct-v0.1'],
     'Groq (Free)': ['llama-3.3-70b-versatile', 'llama-3.1-70b-versatile', 'mixtral-8x7b-32768', 'gemma2-9b-it'],
 };
-function copyToClipboard(text, element) {
+window.copyToClipboard = function(text, element) {
     if (!text) return;
-    navigator.clipboard.writeText(text).then(() => {
-        if (!element) {
-            showSuccess?.('Đã sao chép!');
-            return;
+    console.log('[DEBUG] copyToClipboard called with:', text);
+
+    const performFeedback = () => {
+        console.log('[DEBUG] Copy feedback triggered');
+        showSuccess?.(`Đã copy: ${text.substring(0, 30)}${text.length > 30 ? '...' : ''}`);
+        
+        if (!element) return;
+        
+        const isBadge = element.querySelector('.units-badge, .sku-tag, .tag, .stat-value');
+        if (isBadge) {
+            const badge = element.querySelector('.units-badge, .sku-tag, .tag, .stat-value') || element;
+            const oldBg = badge.style.background;
+            badge.style.background = '#059669'; // Emerald-600
+            const oldText = badge.textContent;
+            badge.textContent = '✓';
+            setTimeout(() => {
+                badge.style.background = oldBg;
+                badge.textContent = oldText;
+            }, 1000);
+        } else {
+            const originalHTML = element.innerHTML;
+            element.style.color = '#34d399';
+            element.innerHTML = '✓ Copied';
+            setTimeout(() => {
+                element.style.color = '';
+                element.innerHTML = originalHTML;
+            }, 1500);
         }
-        const originalHTML = element.innerHTML;
-        const originalTitle = element.title;
-        element.style.color = '#34d399';
-        element.innerHTML = '✓ Copied';
-        setTimeout(() => {
-            element.style.color = '';
-            element.innerHTML = originalHTML;
-            element.title = originalTitle;
-        }, 1500);
-    }).catch(err => {
-        console.error('Copy failed:', err);
-    });
+    };
+
+    // Attempt modern API
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(text).then(() => {
+            console.log('[DEBUG] Navigator.clipboard success');
+            performFeedback();
+        }).catch(err => {
+            console.warn('[DEBUG] Navigator.clipboard failed, trying fallback', err);
+            fallbackCopy(text, performFeedback);
+        });
+    } else {
+        console.log('[DEBUG] Secure context or navigator.clipboard missing, using fallback');
+        fallbackCopy(text, performFeedback);
+    }
+};
+
+function fallbackCopy(text, callback) {
+    try {
+        const textArea = document.createElement("textarea");
+        textArea.value = text;
+        textArea.style.position = "fixed";
+        textArea.style.left = "-9999px";
+        textArea.style.top = "0";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        const successful = document.execCommand('copy');
+        document.body.removeChild(textArea);
+        if (successful) {
+            console.log('[DEBUG] document.execCommand success');
+            callback();
+        } else {
+            console.error('[DEBUG] document.execCommand failed');
+            showError('Trình duyệt không cho phép copy');
+        }
+    } catch (err) {
+        console.error('[DEBUG] Fallback exception:', err);
+        showError('Lỗi copy: ' + err.message);
+    }
 }
 
 function debounce(func, wait) {
@@ -804,7 +856,6 @@ function setupEventListeners() {
                 if (u !== originalName) {
                     // Note: This project doesn't have a direct 'updateUser' API for everything, 
                     // but we can update password and role. Renaming username might be tricky if not supported.
-                    // Based on API object, we have resetPassword. Let's see if we need more.
                     // If username changes, we'll need a rename API. 
                     // For now, let's just handle password and role on originalName.
                     showError('Tính năng đổi tên tài khoản chưa được hỗ trợ. Hãy đổi mật khẩu/vai trò.');
@@ -875,7 +926,8 @@ function setupEventListeners() {
     });
 
     // ---- EXPORT ----
-    DOM.btnExportExcel?.addEventListener('click', exportToCSV);
+    DOM.btnExportCsv?.addEventListener('click', () => exportToCSV());
+    DOM.btnExportExcel?.addEventListener('click', () => exportToExcel());
 
     // ---- MOBILE MENU ----
     DOM.btnMobileMenu?.addEventListener('click', () => {
@@ -1009,6 +1061,34 @@ function setupEventListeners() {
     // --- CÁC SỰ KIỆN KHÁC (INPUT, MODALS) ---
     DOM.searchInput?.addEventListener('input', debounce(renderLinks, 300));
     DOM.sampleSearchInput?.addEventListener('input', debounce(renderSamplesTable, 300));
+
+    // Bulk actions listeners
+    document.getElementById('check-all-links')?.addEventListener('change', (e) => {
+        const checked = e.target.checked;
+        const checkboxes = document.querySelectorAll('.link-checkbox');
+        checkboxes.forEach(cb => {
+            cb.checked = checked;
+            const id = String(cb.dataset.id);
+            if (checked) selectedLinkIds.add(id);
+            else selectedLinkIds.delete(id);
+        });
+        updateBulkActionBar();
+    });
+
+    DOM.linksTableBody.addEventListener('change', (e) => {
+        if (e.target.classList.contains('link-checkbox')) {
+            const id = String(e.target.dataset.id);
+            if (e.target.checked) selectedLinkIds.add(id);
+            else selectedLinkIds.delete(id);
+            updateBulkActionBar();
+        }
+    });
+
+    document.getElementById('btn-bulk-delete')?.addEventListener('click', handleBulkDelete);
+    document.getElementById('btn-bulk-clear')?.addEventListener('click', () => {
+        selectedLinkIds.clear();
+        renderLinks();
+    });
     
     DOM.btnAddToday?.addEventListener('click', () => openAddTaskModal());
     DOM.btnSaveTask?.addEventListener('click', handleSaveTask);
@@ -1540,6 +1620,22 @@ function renderStats() {
     else DOM.btnClearMonthFilter.classList.add('hidden');
 }
 
+let selectedLinkIds = new Set();
+
+function getFilteredLinks() {
+    const searchVal = DOM.searchInput?.value.toLowerCase().trim() || '';
+    const catFilter = DOM.filterCategory?.value || 'ALL';
+    
+    return cachedLinks.filter(l => {
+        const searchTerms = searchVal.split(/\s+/);
+        const urlMatch = searchTerms.every(term => l.url.toLowerCase().includes(term));
+        const catMatch = l.categories.some(c => searchTerms.every(term => c.toLowerCase().includes(term)));
+        
+        const categoryFilterMatch = (catFilter === 'ALL' || l.categories.includes(catFilter));
+        return (urlMatch || catMatch) && categoryFilterMatch;
+    });
+}
+
 function renderLinks() {
     const currentUser = getCurrentUser();
     let links = getFilteredLinks();
@@ -1559,7 +1655,7 @@ function renderLinks() {
 
     DOM.linksTableBody.innerHTML = '';
     if (paginated.length === 0) {
-        DOM.linksTableBody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:gray; padding: 20px;">Không có dữ liệu phù hợp...</td></tr>';
+        DOM.linksTableBody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:gray; padding: 20px;">Không có dữ liệu phù hợp...</td></tr>';
         DOM.paginationControls.classList.add('hidden');
         return;
     }
@@ -1576,7 +1672,12 @@ function renderLinks() {
             <button class="btn-small btn-danger btn-delete-link" data-id="${l.id}">Xóa</button>
         ` : `<span style="color:gray; font-size:0.8em;">N/A</span>`;
 
+        const isChecked = selectedLinkIds.has(String(l.id));
+
         tr.innerHTML = `
+            <td style="text-align: center;">
+                <input type="checkbox" class="link-checkbox" data-id="${l.id}" ${isChecked ? 'checked' : ''}>
+            </td>
             <td><a href="${l.url}" target="_blank" class="url-text">${l.url}</a></td>
             <td><span class="date-text" style="color:#e2e8f0">${l.date}</span></td>
             <td><span class="date-text" style="font-size:0.85em;">${addedBy}</span></td>
@@ -1586,6 +1687,8 @@ function renderLinks() {
         `;
         DOM.linksTableBody.appendChild(tr);
     });
+
+    updateBulkActionBar();
 
     if (totalPages > 1) {
         DOM.paginationControls.classList.remove('hidden');
@@ -1638,6 +1741,51 @@ async function saveEditedLink() {
     } catch (err) { showError(err.message); }
 }
 
+function updateBulkActionBar() {
+    const bar = document.getElementById('bulk-actions-bar');
+    const countEl = document.getElementById('selected-count');
+    if (!bar || !countEl) return;
+
+    if (selectedLinkIds.size > 0) {
+        bar.classList.remove('hidden');
+        countEl.textContent = `${selectedLinkIds.size} link đã chọn`;
+    } else {
+        bar.classList.add('hidden');
+    }
+    
+    // Update "Check All" state
+    const checkAll = document.getElementById('check-all-links');
+    if (checkAll) {
+        const checkboxes = document.querySelectorAll('.link-checkbox');
+        if (checkboxes.length > 0) {
+            const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+            checkAll.checked = allChecked;
+        } else {
+            checkAll.checked = false;
+        }
+    }
+}
+
+async function handleBulkDelete() {
+    if (selectedLinkIds.size === 0) return;
+    
+    if (confirm(`Bạn có chắc chắn muốn xóa ${selectedLinkIds.size} link đã chọn? Hành động này không thể hoàn tác!`)) {
+        try {
+            const ids = Array.from(selectedLinkIds);
+            for (const id of ids) {
+                await API.deleteLink(id);
+            }
+            
+            showSuccess(`Đã xóa ${ids.length} link thành công!`);
+            selectedLinkIds.clear();
+            cachedLinks = await API.getLinks();
+            renderAppContent();
+        } catch (err) {
+            showError('Lỗi khi xóa hàng loạt: ' + err.message);
+        }
+    }
+}
+
 // ====== LOGIC: EXPORT CSV ======
 function exportToCSV() {
     let links = getFilteredLinks();
@@ -1683,19 +1831,47 @@ function exportToCSV() {
     URL.revokeObjectURL(url);
 }
 
+// ====== LOGIC: EXPORT EXCEL ======
+async function exportToExcel() {
+    try {
+        const token = localStorage.getItem('lm_token');
+        const res = await fetch('/api/export/links/excel', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (!res.ok) throw new Error('Xuất file thất bại');
+        
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Dinoz_Links_${new Date().getTime()}.xlsx`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        a.remove();
+        showSuccess('Đã xuất file Excel thành công!');
+    } catch (err) {
+        showError(err.message);
+    }
+}
+
 function updateTopbar(tabId) {
     const titleEl = document.getElementById('topbar-title');
     const statsEl = document.getElementById('topbar-stats');
-    const exportBtn = document.getElementById('btn-export-excel');
+    const exportBtnExcel = document.getElementById('btn-export-excel');
+    const exportBtnCsv = document.getElementById('btn-export-csv');
     const user = getCurrentUser();
     const isAdmin = user && user.role === 'admin';
     
-    exportBtn.classList.add('hidden');
+    exportBtnExcel?.classList.add('hidden');
+    exportBtnCsv?.classList.add('hidden');
     statsEl.classList.add('hidden');
 
     if (tabId === 'links-tab') {
         titleEl.textContent = 'Quản Lý Links';
-        exportBtn.classList.remove('hidden');
+        exportBtnExcel?.classList.remove('hidden');
+        exportBtnCsv?.classList.remove('hidden');
         statsEl.classList.remove('hidden');
         // Khôi phục lại HTML cho statsEl vì có thể bị ghi đè bởi tab khác (ví dụ Trending Niches)
         statsEl.innerHTML = `Tổng số: <span id="total-links">0</span> link`;
@@ -2092,21 +2268,20 @@ window.applyCustomChartRange = function() {
     renderSalesChart();
 };
 
+let salesChartInstance = null;
+
 function renderStatistics() {
     const today = new Date();
     const d7 = new Date(today); d7.setDate(today.getDate() - 7);
     const d30 = new Date(today); d30.setDate(today.getDate() - 30);
 
     const thisMonthKey = today.toISOString().slice(0, 7);
-    console.log(`[Stats] Today: ${today.toISOString()}, MonthKey: ${thisMonthKey}`);
-
     const monthSales = cachedSales.filter(s => s.date.startsWith(thisMonthKey));
-    console.log(`[Stats] Filtered ${monthSales.length} records for current month.`);
     
     const totalUnits = monthSales.reduce((a, s) => a + (s.sales || 0), 0);
     const uniqueSkus = [...new Set(cachedSales.map(s => s.sku))].length;
 
-    // Calculate Top Design (aggregated by design_id)
+    // Calculate Top Design
     const designCount = {};
     cachedSales.forEach(s => { 
         if (s.design_id) designCount[s.design_id] = (designCount[s.design_id] || 0) + s.sales; 
@@ -2116,20 +2291,20 @@ function renderStatistics() {
     const statsContainer = document.getElementById('stats-summary-cards');
     if (statsContainer) {
         statsContainer.innerHTML = `
-            <div class="stat-card">
+            <div class="stat-card glass-panel" onclick="copyToClipboard('${totalUnits}', this)">
                 <div class="stat-icon">📦</div>
-                <div class="stat-title">Doanh Số Tháng Này</div>
-                <div class="stat-val" id="stat-total-units">${totalUnits.toLocaleString()}</div>
+                <div class="stat-value">${totalUnits.toLocaleString()}</div>
+                <div class="stat-label">Doanh Số Tháng ${today.getMonth() + 1}</div>
             </div>
-            <div class="stat-card">
+            <div class="stat-card glass-panel" onclick="copyToClipboard('${uniqueSkus}', this)">
                 <div class="stat-icon">🏷️</div>
-                <div class="stat-title">Số Lượng SKU</div>
-                <div class="stat-val" id="stat-unique-skus">${uniqueSkus}</div>
+                <div class="stat-value">${uniqueSkus}</div>
+                <div class="stat-label">Tổng Số SKU</div>
             </div>
-            <div class="stat-card">
+            <div class="stat-card glass-panel" onclick="copyToClipboard('${topDesign.replace(/'/g, "\\'")}', this)">
                 <div class="stat-icon">🎨</div>
-                <div class="stat-title">Top Design</div>
-                <div class="stat-val" id="stat-top-design" style="font-size:${topDesign.length > 12 ? '1.1em' : '1.6em'}; word-break:break-all;">${topDesign}</div>
+                <div class="stat-value" style="font-size:${topDesign.length > 12 ? '1.1em' : '1.6em'}">${topDesign}</div>
+                <div class="stat-label">Thiết Kế Bán Chạy</div>
             </div>
         `;
     }
@@ -2171,7 +2346,9 @@ function renderTopProducts(tbodyId, data) {
             <td class="col-design" style="cursor:pointer;" title="Click để copy Design: ${p.design_id || 'N/A'}" onclick="copyToClipboard('${(p.design_id || '').replace(/'/g, "\\'")}', this)">
                 <span class="tag" style="background: rgba(96,165,250,0.1); color:#60a5fa; border-color:rgba(96,165,250,0.2);">${p.design_id || 'N/A'}</span>
             </td>
-            <td class="col-sale"><span class="units-badge">${p.total}</span></td>
+            <td class="col-sale" style="cursor:pointer;" title="Click để copy: ${p.total}" onclick="copyToClipboard('${p.total}', this)">
+                <span class="units-badge">${p.total}</span>
+            </td>
             <td class="col-link">${linkHtml}</td>
         `;
         tbody.appendChild(tr);
@@ -2179,13 +2356,8 @@ function renderTopProducts(tbodyId, data) {
 }
 
 function renderSalesChart() {
-    const chartAreaEl = document.getElementById('sales-chart');
-    const labelsEl = document.getElementById('sales-chart-labels');
-    const yaxisEl = document.getElementById('sales-chart-yaxis');
-    const gridEl = document.getElementById('sales-chart-grid');
-    const wrapperEl = document.getElementById('sales-chart-wrapper');
-    
-    if (!chartAreaEl || !labelsEl || !yaxisEl) return;
+    const ctx = document.getElementById('sales-chart-canvas');
+    if (!ctx) return;
 
     let days = [];
     if (currentChartRange === 'custom' && customChartStart && customChartEnd) {
@@ -2204,74 +2376,59 @@ function renderSalesChart() {
         }
     }
 
-    const dayTotals = days.map(day => ({
-        day,
-        label: day.slice(5).replace('-', '/'),
-        total: cachedSales.filter(s => s.date === day).reduce((a, s) => a + s.sales, 0)
-    }));
-    
-    // Y-Axis Max calculation
-    let max = Math.max(...dayTotals.map(d => d.total), 5); // Ensure a baseline max
-    max = Math.ceil(max / 5) * 5; // Round to nearest 5 for clean Y-axis ticks
+    const labels = days.map(day => day.slice(5).replace('-', '/'));
+    const dataValues = days.map(day => cachedSales.filter(s => s.date === day).reduce((a, s) => a + s.sales, 0));
 
-    // Render Y-axis
-    yaxisEl.innerHTML = '';
-    if(gridEl) gridEl.innerHTML = '';
-    
-    const tickCount = 5;
-    for (let i = tickCount; i >= 0; i--) {
-        const val = Math.round((max / tickCount) * i);
-        
-        // Add Y-axis label
-        const tick = document.createElement('div');
-        tick.className = 'yaxis-tick';
-        tick.textContent = val;
-        yaxisEl.appendChild(tick);
-        
-        // Add Grid line
-        if(gridEl) {
-            const line = document.createElement('div');
-            line.className = 'grid-line';
-            gridEl.appendChild(line);
-        }
+    if (salesChartInstance) {
+        salesChartInstance.destroy();
     }
 
-    chartAreaEl.innerHTML = '';
-    labelsEl.innerHTML = '';
-
-    const rangeLength = days.length;
-    const containerWidth = wrapperEl ? wrapperEl.clientWidth - 50 : 600; // Account for Y-axis space
-    const minBarWidth = rangeLength <= 7 ? 48 : rangeLength <= 14 ? 36 : 24;
-    const gap = 6;
-    
-    const barWidth = Math.max(Math.floor(containerWidth / rangeLength), minBarWidth);
-    const totalChartWidth = Math.max((barWidth * rangeLength), containerWidth);
-    
-    chartAreaEl.style.width = totalChartWidth + 'px';
-    labelsEl.style.width = totalChartWidth + 'px';
-    if(gridEl) gridEl.style.width = totalChartWidth + 'px';
-
-    dayTotals.forEach(d => {
-        const heightPct = Math.round((d.total / max) * 100);
-        
-        // Render Bar Wrap
-        const wrap = document.createElement('div');
-        wrap.className = 'chart-bar-wrap';
-        wrap.style.flex = `0 0 ${barWidth - gap}px`;
-        wrap.style.maxWidth = `${barWidth - gap}px`;
-        wrap.innerHTML = `
-            <div class="chart-bar-value" style="opacity: ${d.total > 0 ? 1 : 0}">${d.total}</div>
-            <div class="chart-bar" style="height:${Math.max(heightPct, 1)}%" title="${d.day}: ${d.total} đơn"></div>
-        `;
-        chartAreaEl.appendChild(wrap);
-
-        // Render Label
-        const lbl = document.createElement('div');
-        lbl.className = 'chart-label';
-        lbl.style.flex = `0 0 ${barWidth - gap}px`;
-        lbl.style.maxWidth = `${barWidth - gap}px`;
-        lbl.textContent = d.label;
-        labelsEl.appendChild(lbl);
+    salesChartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Đơn hàng',
+                data: dataValues,
+                backgroundColor: 'rgba(59, 130, 246, 0.6)',
+                borderColor: '#3b82f6',
+                borderWidth: 1,
+                borderRadius: 6,
+                hoverBackgroundColor: 'rgba(59, 130, 246, 0.8)',
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                    titleColor: '#f8fafc',
+                    bodyColor: '#f8fafc',
+                    borderColor: 'rgba(255, 255, 255, 0.1)',
+                    borderWidth: 1,
+                    padding: 12,
+                    displayColors: false,
+                    callbacks: {
+                        title: (items) => `Ngày ${items[0].label}`,
+                        label: (item) => `Tổng: ${item.formattedValue} đơn`
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                    ticks: { color: '#94a3b8', font: { size: 10 } }
+                },
+                x: {
+                    grid: { display: false },
+                    ticks: { color: '#94a3b8', font: { size: 10 } }
+                }
+            },
+            animation: { duration: 1000, easing: 'easeOutQuart' }
+        }
     });
 }
 
@@ -3226,6 +3383,8 @@ function finGetMonthLabel(key) {
     return `${months[parseInt(m, 10) - 1]} ${y}`;
 }
 
+let financeChartInstance = null;
+
 function renderFinanceTab() {
     const user = getCurrentUser();
     const isAdmin = user && user.role === 'admin';
@@ -3241,17 +3400,24 @@ function renderFinanceTab() {
     finPopulateMonthFilter();
     renderFinanceMonthlySummary();
     renderFinanceTable();
+    renderFinanceChart();
 
     if (isAdmin) {
         FinanceDOM.btnSave.onclick = finSaveEntry;
         FinanceDOM.btnCancel.onclick = finCancelEdit;
-        FinanceDOM.filterMonth.onchange = renderFinanceTable;
+        FinanceDOM.filterMonth.onchange = () => {
+            renderFinanceTable();
+            renderFinanceChart();
+        };
 
         if (!FinanceDOM.date.value) {
             FinanceDOM.date.value = new Date().toISOString().split('T')[0];
         }
     } else {
-        FinanceDOM.filterMonth.onchange = renderFinanceTable;
+        FinanceDOM.filterMonth.onchange = () => {
+            renderFinanceTable();
+            renderFinanceChart();
+        };
     }
 }
 
@@ -3289,37 +3455,99 @@ function renderFinanceMonthlySummary() {
         return;
     }
 
-    const cards = months.map(key => {
-        const d = byMonth[key];
-        const profit = d.payment - d.fulfillment - d.other;
-        return `
-        <div class="glass-panel" style="flex:1; min-width:220px; padding: 16px 20px;">
-            <div style="font-size:0.8em; color:var(--text-secondary); font-weight:600; text-transform:uppercase; margin-bottom:10px; letter-spacing:0.5px;">${finGetMonthLabel(key)}</div>
-            <div style="display:flex; flex-direction:column; gap:6px;">
-                <div style="display:flex; justify-content:space-between; font-size:0.9em;">
-                    <span style="color:var(--text-secondary);">Fulfillment</span>
-                    <span style="color:#f87171; font-weight:600;">${finFmt(d.fulfillment)}</span>
-                </div>
-                <div style="display:flex; justify-content:space-between; font-size:0.9em;">
-                    <span style="color:var(--text-secondary);">Chi Phí Khác</span>
-                    <span style="color:#f87171; font-weight:600;">${finFmt(d.other)}</span>
-                </div>
-                <div style="display:flex; justify-content:space-between; font-size:0.9em;">
-                    <span style="color:var(--text-secondary);">Payment</span>
-                    <span style="color:#34d399; font-weight:600;">${finFmt(d.payment)}</span>
-                </div>
-                <div style="border-top:1px solid rgba(255,255,255,0.08); margin-top:6px; padding-top:8px; display:flex; justify-content:space-between; font-size:1em;">
-                    <span style="font-weight:600;">Lợi Nhuận</span>
-                    <span style="font-weight:700; ${finColor(profit)}">${finFmt(profit)}</span>
-                </div>
-            </div>
-        </div>`;
-    }).join('');
+    // Latest month summary cards
+    const latestMonth = months[0];
+    const d = byMonth[latestMonth];
+    const profit = d.payment - d.fulfillment - d.other;
 
     container.innerHTML = `
-        <h3 style="margin-bottom:14px;">Tổng Hợp Theo Tháng</h3>
-        <div style="display:flex; flex-wrap:wrap; gap:16px;">${cards}</div>
+        <h3 style="margin-bottom:14px;">Tóm Tắt ${finGetMonthLabel(latestMonth)}</h3>
+        <div style="display:flex; flex-wrap:wrap; gap:16px; margin-bottom: 24px;">
+            <div class="stat-card glass-panel">
+                <div class="stat-icon" style="color:#f87171;">💸</div>
+                <div class="stat-value" style="color:#f87171;">${finFmt(d.fulfillment + d.other)}</div>
+                <div class="stat-label">Tổng Chi Phí</div>
+            </div>
+            <div class="stat-card glass-panel">
+                <div class="stat-icon" style="color:#34d399;">💰</div>
+                <div class="stat-value" style="color:#34d399;">${finFmt(d.payment)}</div>
+                <div class="stat-label">Tổng Doanh Thu</div>
+            </div>
+            <div class="stat-card glass-panel">
+                <div class="stat-icon" style="color:${profit >= 0 ? '#34d399' : '#f87171'};">📈</div>
+                <div class="stat-value" style="color:${profit >= 0 ? '#34d399' : '#f87171'};">${finFmt(profit)}</div>
+                <div class="stat-label">Lợi Nhuận Thuần</div>
+            </div>
+        </div>
     `;
+}
+
+function renderFinanceChart() {
+    const ctx = document.getElementById('finance-chart-canvas');
+    if (!ctx) return;
+
+    const byMonth = {};
+    cachedFinance.forEach(e => {
+        const key = finGetMonthKey(e.date);
+        if (!byMonth[key]) byMonth[key] = { fulfillment: 0, other: 0, payment: 0 };
+        byMonth[key].fulfillment += parseFloat(e.fulfillment_cost) || 0;
+        byMonth[key].other       += parseFloat(e.other_cost) || 0;
+        byMonth[key].payment     += parseFloat(e.payment) || 0;
+    });
+
+    const sortedMonths = Object.keys(byMonth).sort(); // chronological
+    const labels = sortedMonths.map(m => finGetMonthLabel(m));
+    const profitData = sortedMonths.map(m => {
+        const d = byMonth[m];
+        return d.payment - d.fulfillment - d.other;
+    });
+
+    if (financeChartInstance) {
+        financeChartInstance.destroy();
+    }
+
+    financeChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Lợi Nhuận ($)',
+                data: profitData,
+                borderColor: '#3b82f6',
+                backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                fill: true,
+                tension: 0.4,
+                borderWidth: 3,
+                pointBackgroundColor: '#3b82f6',
+                pointRadius: 4,
+                pointHoverRadius: 6
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                    padding: 12,
+                    callbacks: {
+                        label: (item) => `Lợi nhuận: ${finFmt(item.raw)}`
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                    ticks: { color: '#94a3b8', font: { size: 10 } }
+                },
+                x: {
+                    grid: { display: false },
+                    ticks: { color: '#94a3b8', font: { size: 10 } }
+                }
+            }
+        }
+    });
 }
 
 function renderFinanceTable() {

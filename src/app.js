@@ -9,6 +9,8 @@ const helmet = require('helmet');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 const config = require('./config');
+const logger = require('./utils/logger');
+const errorHandler = require('./middlewares/error');
 
 // ---------- Route Modules ----------
 const authRoutes = require('./routes/auth');
@@ -23,6 +25,7 @@ const sampleRoutes = require('./routes/samples');
 const financeRoutes = require('./routes/finance');
 const holidayRoutes = require('./routes/holidays');
 const trendingRoutes = require('./routes/trending');
+const exportRoutes = require('./routes/export');
 const debugRoutes = require('./routes/debug');
 
 /**
@@ -38,7 +41,15 @@ function createApp(db) {
 
     // ---------- Security ----------
     app.use(helmet({
-        contentSecurityPolicy: false,
+        contentSecurityPolicy: {
+            directives: {
+                ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+                "script-src": ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net", "https://www.googletagmanager.com"],
+                "script-src-attr": ["'unsafe-inline'"],
+                "img-src": ["'self'", "data:", "https:", "http:"],
+                "connect-src": ["'self'", "https://cdn.jsdelivr.net", "https://api.telegram.org"],
+            },
+        },
         crossOriginEmbedderPolicy: false,
     }));
     app.use(cors());
@@ -78,11 +89,15 @@ function createApp(db) {
     app.use(sampleRoutes(express.Router, db));
     app.use(holidayRoutes(express.Router, db));
     app.use(trendingRoutes(express.Router, db));
+    app.use(exportRoutes(express.Router, db));
     
     // Admin-only or restricted routers at the bottom
     app.use(financeRoutes(express.Router, db));
     app.use(userRoutes(express.Router, db));
     app.use(debugRoutes(express.Router, db));
+
+    // ---------- Error Handling ----------
+    app.use(errorHandler);
 
     return app;
 }

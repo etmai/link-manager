@@ -5,111 +5,112 @@
 const express = require('express');
 const { authenticateToken, requireAdmin } = require('../middlewares/auth');
 const config = require('../config');
+const { z } = require('zod');
+const logger = require('../utils/logger');
 
 module.exports = function (Router, db) {
 
     const router = Router();
 
     // ─── GET /api/finance ──────────────────────────────────────────
-    router.get('/api/finance', authenticateToken, requireAdmin, async (req, res) => {
+    router.get('/api/finance', authenticateToken, requireAdmin, async (req, res, next) => {
         try {
             const entries = await db.financeEntry.findMany({
                 orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
             });
             res.json(entries);
         } catch (err) {
-            console.error('[Finance] GET error:', err);
-            res.status(500).json({ error: 'Failed to fetch finance entries.' });
+            next(err);
         }
     });
 
     // ─── POST /api/finance ─────────────────────────────────────────
-    router.post('/api/finance', authenticateToken, requireAdmin, async (req, res) => {
+    router.post('/api/finance', authenticateToken, requireAdmin, async (req, res, next) => {
         try {
+            const schema = z.object({
+                date: z.string().min(1),
+                fulfillment_cost: z.number().optional().default(0),
+                fulfillment_note: z.string().trim().optional().default(''),
+                other_cost: z.number().optional().default(0),
+                other_note: z.string().trim().optional().default(''),
+                payment: z.number().optional().default(0),
+                payment_note: z.string().trim().optional().default(''),
+            });
+
+            const data = schema.parse(req.body);
             const { username: currentUser } = req.user;
-            const { date, fulfillment_cost, fulfillment_note, other_cost, other_note, payment, payment_note } = req.body;
-
-            if (!date || !date.trim()) {
-                return res.status(400).json({ error: 'Date is required.' });
-            }
-
-            const now = new Date().toISOString();
 
             const entry = await db.financeEntry.create({
                 data: {
-                    date,
-                    fulfillment_cost: fulfillment_cost || 0,
-                    fulfillment_note: fulfillment_note || '',
-                    other_cost: other_cost || 0,
-                    other_note: other_note || '',
-                    payment: payment || 0,
-                    payment_note: payment_note || '',
-                    createdAt: now,
+                    ...data,
+                    createdAt: new Date().toISOString(),
                     addedBy: currentUser,
                 },
             });
 
             res.status(201).json({ id: entry.id, message: 'Finance entry created.' });
         } catch (err) {
-            console.error('[Finance] POST error:', err);
-            res.status(500).json({ error: 'Failed to create finance entry.' });
+            next(err);
         }
     });
 
     // ─── PUT /api/finance/:id ──────────────────────────────────────
-    router.put('/api/finance/:id', authenticateToken, requireAdmin, async (req, res) => {
+    router.put('/api/finance/:id', authenticateToken, requireAdmin, async (req, res, next) => {
         try {
-            const { id } = req.params;
-            const { date, fulfillment_cost, fulfillment_note, other_cost, other_note, payment, payment_note } = req.body;
+            const schema = z.object({
+                date: z.string().min(1).optional(),
+                fulfillment_cost: z.number().optional(),
+                fulfillment_note: z.string().trim().optional(),
+                other_cost: z.number().optional(),
+                other_note: z.string().trim().optional(),
+                payment: z.number().optional(),
+                payment_note: z.string().trim().optional(),
+            });
 
-            if (date !== undefined && (!date || !date.trim())) {
-                return res.status(400).json({ error: 'Date cannot be empty.' });
-            }
+            const data = schema.parse(req.body);
+            const { id } = req.params;
 
             const entry = await db.financeEntry.findUnique({ where: { id } });
             if (!entry) {
-                return res.status(404).json({ error: 'Finance entry not found.' });
+                const error = new Error('Finance entry not found.');
+                error.statusCode = 404;
+                error.isPublic = true;
+                throw error;
             }
 
-            const data = {};
-
-            if (date !== undefined) data.date = date;
-            if (fulfillment_cost !== undefined) data.fulfillment_cost = fulfillment_cost;
-            if (fulfillment_note !== undefined) data.fulfillment_note = fulfillment_note;
-            if (other_cost !== undefined) data.other_cost = other_cost;
-            if (other_note !== undefined) data.other_note = other_note;
-            if (payment !== undefined) data.payment = payment;
-            if (payment_note !== undefined) data.payment_note = payment_note;
-
             if (Object.keys(data).length === 0) {
-                return res.status(400).json({ error: 'No fields to update.' });
+                const error = new Error('No fields to update.');
+                error.statusCode = 400;
+                error.isPublic = true;
+                throw error;
             }
 
             await db.financeEntry.update({ where: { id }, data });
 
             res.json({ message: 'Finance entry updated.' });
         } catch (err) {
-            console.error('[Finance] PUT error:', err);
-            res.status(500).json({ error: 'Failed to update finance entry.' });
+            next(err);
         }
     });
 
     // ─── DELETE /api/finance/:id ───────────────────────────────────
-    router.delete('/api/finance/:id', authenticateToken, requireAdmin, async (req, res) => {
+    router.delete('/api/finance/:id', authenticateToken, requireAdmin, async (req, res, next) => {
         try {
             const { id } = req.params;
 
             const entry = await db.financeEntry.findUnique({ where: { id } });
             if (!entry) {
-                return res.status(404).json({ error: 'Finance entry not found.' });
+                const error = new Error('Finance entry not found.');
+                error.statusCode = 404;
+                error.isPublic = true;
+                throw error;
             }
 
             await db.financeEntry.delete({ where: { id } });
 
             res.json({ message: 'Finance entry deleted.' });
         } catch (err) {
-            console.error('[Finance] DELETE error:', err);
-            res.status(500).json({ error: 'Failed to delete finance entry.' });
+            next(err);
         }
     });
 

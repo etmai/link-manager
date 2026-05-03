@@ -4,50 +4,57 @@
  * Exports a function(router, db) that registers all /api/categories endpoints.
  */
 const { authenticateToken, requireAdmin } = require('../middlewares/auth');
+const { z } = require('zod');
 
 module.exports = function (Router, db) {
     const router = Router();
 
     // GET /api/categories — list all category names
-    router.get('/api/categories', authenticateToken, async (req, res) => {
+    router.get('/api/categories', authenticateToken, async (req, res, next) => {
         try {
             const rows = await db.category.findMany({ select: { name: true } });
             res.json(rows.map((r) => r.name));
         } catch (err) {
-            res.status(500).json({ error: err.message });
+            next(err);
         }
     });
 
     // POST /api/categories — create a new category (admin only)
-    router.post('/api/categories', authenticateToken, requireAdmin, async (req, res) => {
+    router.post('/api/categories', authenticateToken, requireAdmin, async (req, res, next) => {
         try {
-            const { name } = req.body;
-            if (!name) {
-                return res.status(400).json({ error: 'Category name is required.' });
-            }
+            const schema = z.object({
+                name: z.string().trim().min(1).max(50),
+            });
+            const { name } = schema.parse(req.body);
 
             // Check duplicate
             const existing = await db.category.findUnique({ where: { name } });
             if (existing) {
-                return res.status(409).json({ error: 'Category already exists.' });
+                const error = new Error('Category already exists.');
+                error.statusCode = 409;
+                error.isPublic = true;
+                throw error;
             }
 
             await db.category.create({ data: { name } });
             res.status(201).json({ message: 'Category created.', name });
         } catch (err) {
-            res.status(500).json({ error: err.message });
+            next(err);
         }
     });
 
     // DELETE /api/categories/:name — delete category & clean up link references
-    router.delete('/api/categories/:name', authenticateToken, requireAdmin, async (req, res) => {
+    router.delete('/api/categories/:name', authenticateToken, requireAdmin, async (req, res, next) => {
         try {
             const { name } = req.params;
 
             // Check category exists
             const existing = await db.category.findUnique({ where: { name } });
             if (!existing) {
-                return res.status(404).json({ error: 'Category not found.' });
+                const error = new Error('Category not found.');
+                error.statusCode = 404;
+                error.isPublic = true;
+                throw error;
             }
 
             // Delete category
@@ -81,30 +88,36 @@ module.exports = function (Router, db) {
 
             res.json({ message: 'Category deleted.', name });
         } catch (err) {
-            res.status(500).json({ error: err.message });
+            next(err);
         }
     });
 
     // PUT /api/categories/:oldName — rename a category (admin only)
-    router.put('/api/categories/:oldName', authenticateToken, requireAdmin, async (req, res) => {
+    router.put('/api/categories/:oldName', authenticateToken, requireAdmin, async (req, res, next) => {
         try {
+            const schema = z.object({
+                newName: z.string().trim().min(1).max(50),
+            });
+            const { newName } = schema.parse(req.body);
             const { oldName } = req.params;
-            const { newName } = req.body;
-            if (!newName) {
-                return res.status(400).json({ error: 'New category name is required.' });
-            }
 
             // Check old category exists
             const existing = await db.category.findUnique({ where: { name: oldName } });
             if (!existing) {
-                return res.status(404).json({ error: 'Category not found.' });
+                const error = new Error('Category not found.');
+                error.statusCode = 404;
+                error.isPublic = true;
+                throw error;
             }
 
             // Check newName is not a duplicate (and not same as old — no-op is ok)
             if (newName !== oldName) {
                 const dup = await db.category.findUnique({ where: { name: newName } });
                 if (dup) {
-                    return res.status(409).json({ error: 'A category with the new name already exists.' });
+                    const error = new Error('A category with the new name already exists.');
+                    error.statusCode = 409;
+                    error.isPublic = true;
+                    throw error;
                 }
             }
 
@@ -142,7 +155,7 @@ module.exports = function (Router, db) {
 
             res.json({ message: 'Category renamed.', oldName, newName });
         } catch (err) {
-            res.status(500).json({ error: err.message });
+            next(err);
         }
     });
 
