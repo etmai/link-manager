@@ -349,5 +349,31 @@ module.exports = function (Router, db) {
         }
     });
 
+    // 12. POST /api/trends/analyze/:id — analyze keyword with AI
+    router.post('/api/trends/analyze/:id', authenticateToken, requireAdmin, async (req, res) => {
+        try {
+            const { id } = req.params;
+            const keywordRow = await db.trendingKeyword.findUnique({ where: { id } });
+            
+            if (!keywordRow) {
+                return res.status(404).json({ error: 'Keyword not found.' });
+            }
+
+            const { analyzeWithFailover } = require('../utils/ai');
+            const { result, provider } = await analyzeWithFailover(db, keywordRow.keyword);
+
+            // Update keyword with AI summary
+            await db.trendingKeyword.update({
+                where: { id },
+                data: { ai_summary: JSON.stringify(result) }
+            });
+
+            res.json({ result, provider });
+        } catch (err) {
+            console.error('[Trends Analyze]', err);
+            res.status(500).json({ error: err.message });
+        }
+    });
+
     return router;
 };

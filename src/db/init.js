@@ -11,6 +11,7 @@ const { randomUUID } = require('crypto');
  */
 async function initDatabase(prisma) {
     try {
+        console.log('[DEBUG] Models:', Object.keys(prisma).filter(k => !k.startsWith('_') && !k.startsWith('$')));
         // Default admin user
         const admin = await prisma.user.findUnique({ where: { username: 'admin' } });
         if (!admin) {
@@ -59,6 +60,41 @@ async function initDatabase(prisma) {
                 await prisma.fulfillment.create({ data: { id: randomUUID(), name } });
             }
             console.log('[SEED] Default fulfillments created.');
+        }
+
+        // Default AI Providers
+        const aiProviderCount = await prisma.aiProvider.count();
+        if (aiProviderCount === 0) {
+            const providers = [
+                { name: 'Google Gemini', model: 'gemini-2.0-flash', apiKey: '', priority: 1, enabled: true },
+                { name: 'Groq (Free)', model: 'llama-3.3-70b-versatile', apiKey: '', priority: 2, enabled: true },
+                { name: 'OpenAI GPT-4o', model: 'gpt-4o-mini', apiKey: '', priority: 3, enabled: true },
+            ];
+            for (const p of providers) {
+                await prisma.aiProvider.create({ data: p });
+            }
+            console.log('[SEED] Default AI providers created.');
+        }
+
+        // Default AI Settings (System Prompt)
+        const promptKey = 'system_prompt';
+        const existingPrompt = await prisma.aiSetting.findUnique({ where: { key: promptKey } });
+        if (!existingPrompt) {
+            const defaultPrompt = `Bạn là một chuyên gia nghiên cứu thị trường Print on Demand (POD) hàng đầu tại Mỹ. Hãy phân tích từ khóa: "{keyword}". Phân tích dựa trên các tiêu chí thẩm mỹ, tâm lý khách hàng Mỹ, và xu hướng thiết kế hiện tại.
+Kết quả trả về phải là một đối tượng JSON hợp lệ với cấu trúc sau:
+{
+  "meaning": "Giải thích ngắn gọn ý nghĩa và nguồn gốc của ngách này trong văn hóa Mỹ.",
+  "audience": "Mô tả chi tiết chân dung khách hàng (Sở thích, độ tuổi, lý do họ mua sản phẩm này).",
+  "product_suggestions": ["T-shirt", "Mug", "Tumbler", "Flag", "Poster"],
+  "design_ideas": ["Ý tưởng thiết kế 1: chi tiết hình ảnh, text", "Ý tưởng thiết kế 2...", "Ý tưởng thiết kế 3..."],
+  "quotes": ["Câu quote 1", "Câu quote 2", "Câu quote 3"],
+  "style_tips": "Gợi ý màu sắc, phông chữ (ví dụ: Vintage, Retro, Minimalist) và xu hướng thiết kế."
+}
+Lưu ý: Chỉ trả về JSON duy nhất, không thêm bất kỳ văn bản giải thích nào trước hoặc sau JSON.`;
+            await prisma.aiSetting.create({
+                data: { key: promptKey, value: defaultPrompt }
+            });
+            console.log('[SEED] Default AI system prompt created.');
         }
 
         console.log('[DB] Seed data initialized.');

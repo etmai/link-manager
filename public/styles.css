@@ -2481,3 +2481,52 @@ select#task-assignee-input option {
         grid-template-columns: 1fr !important;
     }
 }
+/* AI Config and Analysis */
+.ai-summary-content {
+    color: #cbd5e1;
+    line-height: 1.6;
+}
+.ai-summary-content strong {
+    color: #60a5fa;
+}
+.ai-quotes ul {
+    margin-top: 8px !important;
+}
+.ai-quotes li {
+    font-style: italic;
+    margin-bottom: 4px;
+    color: #94a3b8;
+}
+.btn-ai {
+    background: linear-gradient(135deg, #3b82f6, #8b5cf6) !important;
+    border: none !important;
+    color: white !important;
+    transition: transform 0.2s, box-shadow 0.2s !important;
+}
+.btn-ai:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(139, 92, 246, 0.4) !important;
+}
+.btn-ai:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* SortableJS styles */
+.sortable-ghost {
+    opacity: 0.4;
+    background: rgba(139, 92, 246, 0.2) !important;
+}
+.drag-handle {
+    user-select: none;
+    color: var(--text-secondary);
+}
+.drag-handle:hover {
+    color: var(--accent-color);
+}
+.provider-priority {
+    font-family: monospace;
+    font-weight: bold;
+    color: var(--accent-color);
+}

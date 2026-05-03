@@ -197,5 +197,109 @@ module.exports = function (Router, db) {
     }
   });
 
+  // ─── AI Providers ───────────────────────────────────────────
+  
+  router.get('/api/ai/providers', authenticateToken, async (req, res) => {
+    try {
+      const rows = await db.aiProvider.findMany({ orderBy: { priority: 'asc' } });
+      return res.json(rows);
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  router.post('/api/ai/providers', authenticateToken, requireAdmin, async (req, res) => {
+    const { name, model, apiKey, priority, enabled } = req.body;
+    try {
+      const provider = await db.aiProvider.create({
+        data: { 
+          name, 
+          model, 
+          apiKey: apiKey || '', 
+          priority: parseInt(priority, 10) || 0,
+          enabled: enabled !== undefined ? enabled : true
+        }
+      });
+      return res.status(201).json(provider);
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  router.put('/api/ai/providers/:id', authenticateToken, requireAdmin, async (req, res) => {
+    const { name, model, apiKey, priority, enabled } = req.body;
+    try {
+      const data = {};
+      if (name !== undefined) data.name = name;
+      if (model !== undefined) data.model = model;
+      if (apiKey !== undefined) data.apiKey = apiKey;
+      if (priority !== undefined) data.priority = parseInt(priority, 10);
+      if (enabled !== undefined) data.enabled = enabled;
+
+      const provider = await db.aiProvider.update({
+        where: { id: req.params.id },
+        data
+      });
+      return res.json(provider);
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  router.delete('/api/ai/providers/:id', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      await db.aiProvider.delete({ where: { id: req.params.id } });
+      return res.json({ message: 'Xóa AI provider thành công!' });
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ─── AI Settings ─────────────────────────────────────────────
+
+  router.get('/api/ai/settings', authenticateToken, async (req, res) => {
+    try {
+      const rows = await db.aiSetting.findMany();
+      const settings = {};
+      rows.forEach(r => settings[r.key] = r.value);
+      return res.json(settings);
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  router.post('/api/ai/settings', authenticateToken, requireAdmin, async (req, res) => {
+    const { key, value } = req.body;
+    try {
+      const setting = await db.aiSetting.upsert({
+        where: { key },
+        update: { value },
+        create: { key, value }
+      });
+      return res.json(setting);
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ─── Test Connection ─────────────────────────────────────────
+
+  router.post('/api/ai/test-connection', authenticateToken, requireAdmin, async (req, res) => {
+    const { name, model, apiKey } = req.body;
+    if (!name || !model || !apiKey) {
+      return res.status(400).json({ error: 'Thiếu thông tin Agent, Model hoặc API Key!' });
+    }
+
+    try {
+      const { callAgent } = require('../utils/ai');
+      const testPrompt = "Please respond with exactly 'Connection Successful' and nothing else.";
+      const response = await callAgent({ name, model, apiKey }, testPrompt);
+      
+      return res.json({ message: response || 'No response' });
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
   return router;
 };

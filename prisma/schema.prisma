@@ -7,6 +7,23 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model AiProvider {
+  id        String   @id @default(uuid())
+  name      String
+  model     String
+  apiKey    String
+  priority  Int      @default(0)
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  @@map("ai_providers")
+}
+
+model AiSetting {
+  key   String @id
+  value String
+  @@map("ai_settings")
+}
+
 model User {
   username String @id
   password String

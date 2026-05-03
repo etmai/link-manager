@@ -148,6 +148,15 @@ const API = {
     async updateFinance(id, data) { return API.fetch(`/api/finance/${id}`, { method: 'PUT', body: JSON.stringify(data) }); },
     async deleteFinance(id) { return API.fetch(`/api/finance/${id}`, { method: 'DELETE' }); },
 
+    // AI CONFIG
+    async getAiProviders() { return API.fetch('/api/ai/providers'); },
+    async addAiProvider(data) { return API.fetch('/api/ai/providers', { method: 'POST', body: JSON.stringify(data) }); },
+    async updateAiProvider(id, data) { return API.fetch(`/api/ai/providers/${id}`, { method: 'PUT', body: JSON.stringify(data) }); },
+    async deleteAiProvider(id) { return API.fetch(`/api/ai/providers/${id}`, { method: 'DELETE' }); },
+    async getAiSettings() { return API.fetch('/api/ai/settings'); },
+    async updateAiSetting(key, value) { return API.fetch('/api/ai/settings', { method: 'POST', body: JSON.stringify({ key, value }) }); },
+    async testAiConnection(data) { return API.fetch('/api/ai/test-connection', { method: 'POST', body: JSON.stringify(data) }); },
+
     // TRELLO
     async syncTrelloCard(taskId) { return API.fetch(`/api/trello/sync/${taskId}`, { method: 'POST' }); },
     async uploadTrelloFile(taskId, formData) {
@@ -211,6 +220,8 @@ function resetAppState() {
     cachedUsers = [];
     cachedSamples = [];
     cachedFinance = [];
+    cachedAiProviders = [];
+    cachedAiSettings = {};
     selectedScheduleUser = 'all';
 }
 
@@ -350,10 +361,30 @@ const DOM = {
     uploadProgress: document.getElementById('upload-progress'),
     progressBar: document.getElementById('progress-bar'),
     detailTrelloSection: document.getElementById('detail-trello-section'),
-    detailTrelloAttachments: document.getElementById('detail-trello-attachments')
+    detailTrelloAttachments: document.getElementById('detail-trello-attachments'),
+
+    // AI Config Elements
+    aiProvidersTableBody: document.getElementById('ai-providers-table-body'),
+    aiProviderForm: document.getElementById('ai-provider-form'),
+    aiProviderId: document.getElementById('ai-provider-id'),
+    aiApiKeyInput: document.getElementById('ai-apikey'),
+    aiPriorityInput: document.getElementById('ai-priority'),
+    aiNameSelect: document.getElementById('ai-name'),
+    aiNameCustomInput: document.getElementById('ai-name-custom'),
+    aiModelInput: document.getElementById('ai-model'),
+    btnTestAiConnection: document.getElementById('btn-test-ai-connection'),
+    btnCancelAiEdit: document.getElementById('btn-cancel-ai-edit'),
+    aiSystemPrompt: document.getElementById('ai-system-prompt'),
+    btnSaveAiPrompt: document.getElementById('btn-save-ai-prompt'),
 };
 
-// ====== UTILS ======
+// AI Models mapping
+const AI_MODELS_MAP = {
+    'Google Gemini': ['gemini-2.0-flash', 'gemini-1.5-pro', 'gemini-1.5-flash', 'gemini-pro'],
+    'OpenRouter': ['google/gemini-2.0-flash-001', 'anthropic/claude-3.5-sonnet', 'deepseek/deepseek-chat', 'meta-llama/llama-3.3-70b-instruct'],
+    'NVIDIA NIM': ['nvidia/llama-3.1-nemotron-70b-instruct', 'meta/llama-3.1-405b-instruct', 'mistralai/mixtral-8x7b-instruct-v0.1'],
+    'Groq (Free)': ['llama-3.3-70b-versatile', 'llama-3.1-70b-versatile', 'mixtral-8x7b-32768', 'gemma2-9b-it'],
+};
 function copyToClipboard(text, element) {
     if (!text) return;
     navigator.clipboard.writeText(text).then(() => {
@@ -724,21 +755,36 @@ function setupEventListeners() {
                 renderSalesTable();
                 renderStatistics();
                 updateTopbar('sales-tab');
-                const msgEl = document.getElementById('sales-form-msg');
-                if (msgEl) {
-                    msgEl.textContent = '✅ Đã xóa bản ghi thành công!';
-                    setTimeout(() => { msgEl.textContent = ''; }, 3000);
-                }
             } else if (type === 'trend') {
                 await TrendsAPI.delete(id);
                 renderTrendingNiches();
             } else if (type === 'evergreen') {
                 await TrendsAPI.deleteEvergreen(id);
                 renderEvergreenKeywords();
-            } else if (['account', 'merchant', 'fulfillment', 'category'].includes(type)) {
-                await confirmUniversalDelete();
+            } else if (type === 'account') {
+                await API.deleteAccount(id);
+                cachedAccounts = await API.getAccounts();
+                renderAccountsTable();
+            } else if (type === 'merchant') {
+                await API.deleteMerchant(id);
+                cachedMerchants = await API.getMerchants();
+                renderMerchantsTable();
+            } else if (type === 'fulfillment') {
+                await API.deleteFulfillment(id);
+                cachedFulfillments = await API.getFulfillments();
+                renderFulfillmentsTable();
+            } else if (type === 'category') {
+                await API.deleteCategory(id);
+                cachedCategories = await API.getCategories();
+                cachedLinks = await API.getLinks();
+                renderAppContent();
+                if (typeof renderManageCategoriesTable === 'function') await renderManageCategoriesTable();
+                if (typeof renderCategoriesFullTable === 'function') renderCategoriesFullTable();
             }
+
+            updateSalesDropdowns();
             closeAllModals();
+            showSuccess('Đã xóa thành công!');
         } catch (err) { showError(err.message); }
     });
 
@@ -809,7 +855,6 @@ function setupEventListeners() {
     // ---- EDIT LINK ----
     document.getElementById('btn-save-edit-link')?.addEventListener('click', saveEditedLink);
     document.getElementById('btn-save-universal-rename')?.addEventListener('click', saveUniversalRename);
-    document.getElementById('btn-confirm-delete')?.addEventListener('click', confirmUniversalDelete);
 
     // ---- SAVE SAMPLE LINK ----
     DOM.btnSaveSampleLink?.addEventListener('click', async () => {
@@ -897,6 +942,11 @@ function setupEventListeners() {
             document.querySelectorAll('.settings-panel').forEach(p => p.classList.remove('active-panel'));
             const panel = document.getElementById(panelId);
             if (panel) panel.classList.add('active-panel');
+            
+            // Trigger AI config load if needed
+            if (panelId === 'ai-config-panel') {
+                renderAiConfig();
+            }
             return;
         }
 
@@ -1297,53 +1347,6 @@ window.openDeleteModal = function(type, id, name) {
     openModal(DOM.modalConfirmDelete);
 };
 
-async function confirmUniversalDelete() {
-    const id = document.getElementById('confirm-delete-id').value;
-    const type = document.getElementById('confirm-delete-type').value;
-
-    try {
-        switch(type) {
-            case 'account':
-                await API.deleteAccount(id);
-                cachedAccounts = await API.getAccounts();
-                renderAccountsTable();
-                break;
-            case 'merchant':
-                await API.deleteMerchant(id);
-                cachedMerchants = await API.getMerchants();
-                renderMerchantsTable();
-                break;
-            case 'fulfillment':
-                await API.deleteFulfillment(id);
-                cachedFulfillments = await API.getFulfillments();
-                renderFulfillmentsTable();
-                break;
-            case 'category':
-                await API.deleteCategory(id); // id is the name for categories
-                cachedCategories = await API.getCategories();
-                cachedLinks = await API.getLinks();
-                renderAppContent();
-                await renderManageCategoriesTable();
-                if (typeof renderCategoriesFullTable === 'function') renderCategoriesFullTable();
-                break;
-            case 'task':
-                await API.deleteSchedule(id);
-                await refreshAll();
-                break;
-            case 'link':
-                await API.deleteLink(id);
-                cachedLinks = await API.getLinks();
-                renderAppContent();
-                break;
-        }
-        
-        updateSalesDropdowns();
-        closeAllModals();
-        showSuccess('Đã xóa thành công!');
-    } catch (err) {
-        showError(err.message);
-    }
-}
 
 // Consolidate handleDeleteCategory to use the modal
 window.handleDeleteCategory = undefined; // Handled by openDeleteModal and confirmUniversalDelete
@@ -3057,6 +3060,7 @@ async function handleSaveTask() {
         await loadScheduleData();
         closeAllModals();
         renderSchedule();
+        showSuccess(id ? 'Đã cập nhật công việc!' : 'Đã tạo công việc thành công!');
     } catch (err) { showError(err.message); }
 }
 
@@ -3431,6 +3435,9 @@ const TrendsAPI = {
     async deleteEvergreen(id)     {
         return API.fetch(`/api/evergreen/${id}`, { method: 'DELETE' });
     },
+    async analyze(id) {
+        return API.fetch(`/api/trends/analyze/${id}`, { method: 'POST' });
+    },
     async refresh()               { 
         await renderTrendingNiches(); 
         return { success: true, message: 'Đã cập nhật dữ liệu...' };
@@ -3588,6 +3595,31 @@ async function renderTrendingNiches() {
                     const pinUrl = `https://www.pinterest.com/search/pins/?q=${q}&rs=shopping_filter&filter_location=1&domains=etsy.com&commerce_only=true`;
                     const cfabUrl = `https://www.creativefabrica.com/search/?query=${encodeURIComponent(kw.keyword)}&sortBy=newest`;
                     
+                    let aiHtml = '<p style="opacity:0.6; font-style:italic;">Chưa có phân tích AI cho niche này.</p>';
+                    if (kw.ai_summary) {
+                        try {
+                            const ai = JSON.parse(kw.ai_summary);
+                            aiHtml = `
+                                <div class="ai-summary-content" style="font-size:0.85em; display:flex; flex-direction:column; gap:8px;">
+                                    <div class="ai-meaning"><strong>💡 Ý nghĩa:</strong> ${ai.meaning || ''}</div>
+                                    <div class="ai-audience"><strong>👥 Khách hàng:</strong> ${ai.audience || ''}</div>
+                                    <div class="ai-products"><strong>📦 Gợi ý:</strong> ${(ai.product_suggestions || []).join(', ')}</div>
+                                    <div class="ai-quotes">
+                                        <strong>💬 Quotes:</strong>
+                                        <ul style="margin:4px 0 0 15px; padding:0; list-style:disc;">
+                                            ${(ai.quotes || []).slice(0,3).map(quote => `<li>${quote}</li>`).join('')}
+                                        </ul>
+                                    </div>
+                                    <div class="ai-style" style="opacity:0.8; font-size:0.9em; border-top:1px dashed rgba(255,255,255,0.1); padding-top:4px;">
+                                        <strong>🎨 Style:</strong> ${ai.style_tips || ''}
+                                    </div>
+                                </div>
+                            `;
+                        } catch(e) { 
+                            aiHtml = `<p>${kw.ai_summary}</p>`; 
+                        }
+                    }
+
                     return `
                     <div class="dinoz-premium-list-item ${kw.is_pinned ? 'pinned-card' : ''}">
                         <div class="niche-card-header">
@@ -3598,8 +3630,8 @@ async function renderTrendingNiches() {
                             <span class="niche-card-category">${kw.category}</span>
                         </div>
                         
-                        <div class="niche-card-summary">
-                            ${kw.ai_summary || 'Chưa có phân tích AI cho niche này.'}
+                        <div class="niche-card-summary" style="margin-bottom:15px; background:rgba(0,0,0,0.2); padding:12px; border-radius:8px; border:1px solid rgba(255,255,255,0.05);">
+                            ${aiHtml}
                         </div>
                         
                         <div class="heat-bar-wrapper">
@@ -3621,6 +3653,7 @@ async function renderTrendingNiches() {
                                 </div>
                                 <div class="quick-links-row">
                                     <a href="${cfabUrl}" target="_blank" class="trend-link-btn trend-cfab">CFab</a>
+                                    ${isAdmin ? `<button class="trend-link-btn btn-ai trend-analyze-btn" data-id="${kw.id}" style="background:linear-gradient(135deg, #3b82f6, #8b5cf6); border:none; color:white;">🤖 Analyze AI</button>` : ''}
                                     ${isAdmin ? `<button class="trend-link-btn btn-danger trend-delete-btn" data-id="${kw.id}">Xóa</button>` : ''}
                                 </div>
                             </div>
@@ -3640,6 +3673,9 @@ async function renderTrendingNiches() {
                         const id = deleteBtn.dataset.id;
                         const keyword = deleteBtn.closest('.dinoz-premium-list-item').querySelector('.niche-card-title').textContent.split(' ').slice(1).join(' ');
                         window.openDeleteModal('trend', id, keyword);
+                    } else if (analyzeBtn) {
+                        const id = analyzeBtn.dataset.id;
+                        await window.handleAnalyzeAi(id, analyzeBtn);
                     }
                 };
 
@@ -3853,8 +3889,6 @@ function handleCancelEvergreen() {
     if (previewArea) previewArea.classList.add('hidden');
 }
 
-// handleDeleteEvergreen is now handled by openDeleteModal and confirmUniversalDelete
-
 // ── Handlers ──
 window.handlePinTrend = async function(id) {
     try {
@@ -3862,8 +3896,6 @@ window.handlePinTrend = async function(id) {
         renderTrendingNiches();
     } catch(e) { showError(e.message); }
 };
-
-// handleDeleteTrend is now handled by openDeleteModal and confirmUniversalDelete
 
 async function handleAddEvergreenKeyword() {
     const input = document.getElementById('trend-kw-input');
@@ -3897,6 +3929,244 @@ async function handleRefreshTrends() {
     } finally {
         if (btn) { btn.disabled = false; btn.textContent = '🔄 Refresh'; }
     }
+}
+
+async function renderAiConfig() {
+    try {
+        const providers = await API.getAiProviders();
+        const settings = await API.getAiSettings();
+        cachedAiProviders = providers.sort((a, b) => a.priority - b.priority);
+
+        DOM.aiProvidersTableBody.innerHTML = cachedAiProviders.map((p, index) => `
+            <tr data-id="${p.id}">
+                <td class="drag-handle" style="cursor: move; opacity: 0.5;">⣿</td>
+                <td class="provider-priority">${p.priority}</td>
+                <td><strong>${p.name}</strong></td>
+                <td><code>${p.model}</code></td>
+                <td><span class="status-pill ${p.enabled ? 'status-active' : 'status-inactive'}">${p.enabled ? 'Hoạt động' : 'Tắt'}</span></td>
+                <td style="text-align: right;">
+                    <button class="btn-icon btn-edit-ai" data-id="${p.id}" title="Sửa">✏️</button>
+                    <button class="btn-icon btn-toggle-ai" data-id="${p.id}" title="${p.enabled ? 'Vô hiệu' : 'Kích hoạt'}">${p.enabled ? '🚫' : '✅'}</button>
+                    <button class="btn-icon btn-delete-ai" data-id="${p.id}" title="Xóa">🗑️</button>
+                </td>
+            </tr>
+        `).join('');
+
+        // Initialize Sortable if not already done
+        if (!DOM.aiProvidersTableBody.sortable) {
+            DOM.aiProvidersTableBody.sortable = new Sortable(DOM.aiProvidersTableBody, {
+                handle: '.drag-handle',
+                animation: 150,
+                ghostClass: 'sortable-ghost',
+                onEnd: async () => {
+                    await updateAiPriorities();
+                }
+            });
+        }
+
+        // Render Settings
+        if (settings.system_prompt) {
+            DOM.aiSystemPrompt.value = settings.system_prompt;
+        }
+
+        // Add Listeners to buttons
+        DOM.aiProvidersTableBody.querySelectorAll('.btn-edit-ai').forEach(btn => {
+            btn.onclick = () => {
+                const p = cachedAiProviders.find(x => x.id === btn.dataset.id);
+                if (p) {
+                    DOM.aiProviderId.value = p.id;
+                    
+                    // Set Select or Custom
+                    if (AI_MODELS_MAP[p.name]) {
+                        DOM.aiNameSelect.value = p.name;
+                        DOM.aiNameCustomInput.classList.add('hidden');
+                    } else {
+                        DOM.aiNameSelect.value = 'Custom';
+                        DOM.aiNameCustomInput.value = p.name;
+                        DOM.aiNameCustomInput.classList.remove('hidden');
+                    }
+
+                    DOM.aiModelInput.value = p.model;
+                    DOM.aiApiKeyInput.value = p.apiKey || '';
+                    DOM.aiPriorityInput.value = p.priority;
+                    DOM.btnCancelAiEdit.classList.remove('hidden');
+                }
+            };
+        });
+
+        DOM.aiProvidersTableBody.querySelectorAll('.btn-toggle-ai').forEach(btn => {
+            btn.onclick = async () => {
+                const p = cachedAiProviders.find(x => x.id === btn.dataset.id);
+                if (p) {
+                    await API.updateAiProvider(p.id, { enabled: !p.enabled });
+                    renderAiConfig();
+                }
+            };
+        });
+
+        DOM.aiProvidersTableBody.querySelectorAll('.btn-delete-ai').forEach(btn => {
+            btn.onclick = async () => {
+                const p = cachedAiProviders.find(x => x.id === btn.dataset.id);
+                if (confirm(`Bạn có chắc chắn muốn xóa Agent "${p.name}"?`)) {
+                    await API.deleteAiProvider(p.id);
+                    renderAiConfig();
+                }
+            };
+        });
+
+    } catch (err) {
+        console.error('[AI Config Render]', err);
+    }
+}
+
+async function updateAiPriorities() {
+    const rows = Array.from(DOM.aiProvidersTableBody.querySelectorAll('tr'));
+    const updates = rows.map((row, index) => ({
+        id: row.dataset.id,
+        priority: index + 1
+    }));
+
+    try {
+        for (const up of updates) {
+            await API.updateAiProvider(up.id, { priority: up.priority });
+        }
+        showSuccess('Đã cập nhật thứ tự ưu tiên.');
+        renderAiConfig();
+    } catch (err) {
+        showError('Lỗi cập nhật ưu tiên: ' + err.message);
+    }
+}
+
+function updateModelOptions(agentName) {
+    const models = AI_MODELS_MAP[agentName] || [];
+    DOM.aiModelSelect.innerHTML = '<option value="">-- Chọn Model --</option>' + 
+        models.map(m => `<option value="${m}">${m}</option>`).join('') + 
+        '<option value="Custom">Khác (Tự nhập)</option>';
+    
+    if (agentName === 'Custom') {
+        DOM.aiModelSelect.value = 'Custom';
+        DOM.aiModelCustomInput.classList.remove('hidden');
+    } else {
+        DOM.aiModelCustomInput.classList.add('hidden');
+    }
+}
+
+async function handleTestAiConnection() {
+    const name = DOM.aiNameSelect.value === 'Custom' ? DOM.aiNameCustomInput.value.trim() : DOM.aiNameSelect.value;
+    const model = DOM.aiModelInput.value.trim();
+    const apiKey = DOM.aiApiKeyInput.value.trim();
+
+    if (!name || !model || !apiKey) {
+        showError('Vui lòng nhập đầy đủ Tên Agent, Model ID và API Key để test.');
+        return;
+    }
+
+    const btn = DOM.btnTestAiConnection;
+    const originalText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '⏳ Testing...';
+
+    try {
+        const res = await API.testAiConnection({ name, model, apiKey });
+        showSuccess(`✅ Kết nối thành công! AI trả lời: "${res.message}"`);
+    } catch (err) {
+        showError(`❌ Kết nối thất bại: ${err.message}`);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+    }
+}
+
+async function handleSaveAiProvider(e) {
+    if (e) e.preventDefault();
+    const id = DOM.aiProviderId.value;
+    
+    const name = DOM.aiNameSelect.value === 'Custom' ? DOM.aiNameCustomInput.value.trim() : DOM.aiNameSelect.value;
+    const model = DOM.aiModelInput.value.trim();
+
+    if (!name || !model) {
+        showError('Vui lòng chọn hoặc nhập đầy đủ Tên Agent và Model.');
+        return;
+    }
+
+    const data = {
+        name,
+        model,
+        apiKey: DOM.aiApiKeyInput.value.trim(),
+        priority: parseInt(DOM.aiPriorityInput.value, 10) || 0
+    };
+
+    try {
+        if (id) {
+            await API.updateAiProvider(id, data);
+            showSuccess('Đã cập nhật AI Provider.');
+        } else {
+            await API.addAiProvider(data);
+            showSuccess('Đã thêm AI Provider mới.');
+        }
+        DOM.aiProviderForm.reset();
+        DOM.aiProviderId.value = '';
+        DOM.aiNameCustomInput.classList.add('hidden');
+        DOM.btnCancelAiEdit.classList.add('hidden');
+        renderAiConfig();
+    } catch (err) {
+        showError(err.message);
+    }
+}
+
+async function handleSaveAiPrompt() {
+    const value = DOM.aiSystemPrompt.value.trim();
+    try {
+        await API.updateAiSetting('system_prompt', value);
+        showSuccess('Đã lưu System Prompt.');
+    } catch (err) {
+        showError(err.message);
+    }
+}
+
+window.handleAnalyzeAi = async function(id, btn) {
+    if (!btn) return;
+    const originalText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '⏳ Analyzing...';
+
+    try {
+        const res = await TrendsAPI.analyze(id);
+        showSuccess(`Phân tích thành công bằng ${res.provider}`);
+        renderTrendingNiches(); // Re-render to show summary
+    } catch (err) {
+        showError(err.message);
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    }
+};
+
+// Add Listeners
+if (DOM.aiProviderForm) {
+    DOM.aiProviderForm.onsubmit = handleSaveAiProvider;
+}
+if (DOM.btnTestAiConnection) {
+    DOM.btnTestAiConnection.onclick = handleTestAiConnection;
+}
+if (DOM.aiNameSelect) {
+    DOM.aiNameSelect.onchange = (e) => {
+        if (e.target.value === 'Custom') {
+            DOM.aiNameCustomInput.classList.remove('hidden');
+        } else {
+            DOM.aiNameCustomInput.classList.add('hidden');
+        }
+    };
+}
+if (DOM.btnCancelAiEdit) {
+    DOM.btnCancelAiEdit.onclick = () => {
+        DOM.aiProviderForm.reset();
+        DOM.aiProviderId.value = '';
+        DOM.aiNameCustomInput.classList.add('hidden');
+        DOM.btnCancelAiEdit.classList.add('hidden');
+    };
+}
+if (DOM.btnSaveAiPrompt) {
+    DOM.btnSaveAiPrompt.onclick = handleSaveAiPrompt;
 }
 
 

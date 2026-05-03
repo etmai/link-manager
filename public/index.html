@@ -193,7 +193,7 @@
                         <button class="settings-subtab" data-subtab="merchants-panel">🏪 Merchant</button>
                         <button class="settings-subtab" data-subtab="fulfillments-panel">📦 Fulfillment</button>
                         <button class="settings-subtab" data-subtab="categories-panel">🏷️ Category</button>
-
+                        <button class="settings-subtab" data-subtab="ai-config-panel">🤖 AI Config</button>
                     </div>
 
                     <!-- PANEL: ACCOUNTS -->
@@ -300,6 +300,75 @@
                         </div>
                     </div>
 
+                    <!-- PANEL: AI CONFIG -->
+                    <div id="ai-config-panel" class="settings-panel">
+                        <div class="add-link-section glass-panel">
+                            <h3>🤖 Cấu Hình AI Agents</h3>
+                            <form id="ai-provider-form">
+                                <input type="hidden" id="ai-provider-id">
+                                <div class="form-row" style="flex-wrap: wrap; gap: 12px;">
+                                    <div class="input-group" style="flex: 1; min-width: 150px;">
+                                        <label>Tên Agent</label>
+                                        <select id="ai-name" required>
+                                            <option value="">-- Chọn Agent --</option>
+                                            <option value="Google Gemini">Google Gemini</option>
+                                            <option value="OpenRouter">OpenRouter</option>
+                                            <option value="NVIDIA NIM">NVIDIA NIM</option>
+                                            <option value="Groq (Free)">Groq (Free)</option>
+                                            <option value="Custom">Khác (Tự nhập)</option>
+                                        </select>
+                                        <input type="text" id="ai-name-custom" class="hidden" placeholder="Tên Agent tự định nghĩa..." style="margin-top: 5px;">
+                                    </div>
+                                    <div class="input-group" style="flex: 1; min-width: 150px;">
+                                        <label>Model ID</label>
+                                        <input type="text" id="ai-model" placeholder="Model ID..." required>
+                                    </div>
+                                    <div class="input-group" style="flex: 1; min-width: 200px;">
+                                        <label>API Key</label>
+                                        <input type="password" id="ai-apikey" placeholder="Nhập API Key...">
+                                    </div>
+                                    <div class="input-group hidden" style="width: 80px;">
+                                        <label>Ưu tiên</label>
+                                        <input type="number" id="ai-priority" value="0" min="0">
+                                    </div>
+                                    <div class="form-actions" style="margin-top: 24px;">
+                                        <button type="button" class="btn-secondary" id="btn-test-ai-connection">⚡ Test Connection</button>
+                                        <button type="submit" class="btn-primary" id="btn-save-ai-provider">Lưu Agent</button>
+                                        <button type="button" class="btn-secondary hidden" id="btn-cancel-ai-edit">Hủy</button>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
+
+                        <div class="links-display-section glass-panel">
+                            <div class="table-container">
+                                <table class="modern-table">
+                                    <thead>
+                                        <tr>
+                                            <th style="width: 40px;"></th>
+                                            <th style="width: 80px;">Ưu tiên</th>
+                                            <th>Tên Agent</th>
+                                            <th>Model</th>
+                                            <th>Trạng thái</th>
+                                            <th style="width: 140px; text-align: right;">Hành Động</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="ai-providers-table-body"></tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <div class="add-link-section glass-panel" style="margin-top: 24px;">
+                            <h3>📝 AI System Prompt (Default)</h3>
+                            <div class="input-group">
+                                <label>Prompt mẫu cho phân tích POD (Sử dụng {keyword} làm placeholder)</label>
+                                <textarea id="ai-system-prompt" rows="12" style="font-family: monospace; font-size: 0.9em;"></textarea>
+                            </div>
+                            <div class="form-actions" style="justify-content: flex-end;">
+                                <button type="button" class="btn-primary" id="btn-save-ai-prompt">💾 Lưu Prompt</button>
+                            </div>
+                        </div>
+                    </div>
 
                 </div>
             </div>

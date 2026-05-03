@@ -181,7 +181,7 @@ module.exports = function (Router, db) {
             await db.taskComment.deleteMany({ where: { taskId: id } });
 
             // Delete the task
-            await db.workSchedule.delete({ where: { id } });
+            await db.workSchedule.deleteMany({ where: { id } });
 
             res.json({ message: 'Task deleted successfully.' });
         } catch (err) {
