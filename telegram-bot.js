@@ -9,7 +9,33 @@ let botInstance = null;
  */
 function initTelegramBot(db) {
     const token = process.env.TELEGRAM_BOT_TOKEN;
-    const allowedGroupId = process.env.TELEGRAM_GROUP_ID;
+    const allowedGroupId = (process.env.TELEGRAM_GROUP_ID || '').trim();
+
+    // Helper for database compatibility (Prisma vs SQLite standard)
+    const executeQuery = async (sql, params = []) => {
+        if (!db) throw new Error("Database instance is missing");
+        
+        // Check if it's a Prisma instance
+        if (db.$executeRawUnsafe) {
+            const result = await db.$executeRawUnsafe(sql, ...params);
+            return { changes: result };
+        } 
+        // Assume it's a standard sqlite instance
+        if (typeof db.run === 'function') {
+            return new Promise((resolve, reject) => {
+                db.run(sql, params, function(err) {
+                    if (err) reject(err);
+                    else resolve({ changes: this.changes, lastID: this.lastID });
+                });
+            });
+        }
+        // Fallback for some wrappers that return promises directly
+        if (db.run && typeof db.run.then === 'function' || db.constructor.name === 'Database') {
+             return db.run(sql, params);
+        }
+
+        throw new Error("Unsupported database instance (no .run or .$executeRawUnsafe function found)");
+    };
 
     console.log(`🔍 [Telegram] Debug: Init attempt at ${new Date().toISOString()} | Token: ${token ? token.substring(0, 10) + '...' : 'MISSING'}`);
 
@@ -41,8 +67,23 @@ function initTelegramBot(db) {
 
                     console.log(`📩 [Telegram] Message from ${chatId}: ${text.substring(0, 40)}...`);
 
+                    // Health check command
+                    if (text === '/check' || text === '/check@dinoz_trendbot') {
+                        botInstance.sendMessage(chatId, `✅ Dinoz Bot đang hoạt động! \n🆔 Group ID: ${chatId}\n📡 Trạng thái: Sẵn sàng cập nhật keyword.`);
+                        return;
+                    }
+
                     if (text === '/id' || text === '/id@bot_username') {
                         botInstance.sendMessage(chatId, `🆔 Chat ID: ${chatId}`);
+                        return;
+                    }
+
+                    // Strict security check: Only process messages from the allowed group
+                    const targetGroupId = String(allowedGroupId || '').trim();
+                    const incomingChatId = String(chatId || '').trim();
+
+                    if (targetGroupId && incomingChatId !== targetGroupId) {
+                        console.warn(`⚠️ [Telegram] Ignoring message from unauthorized chat: "${incomingChatId}" (Expected: "${targetGroupId}")`);
                         return;
                     }
 
@@ -53,7 +94,7 @@ function initTelegramBot(db) {
                         let addedCount = 0;
 
                         // Clear old holidays before updating with the new report
-                        await db.run("DELETE FROM usa_holidays");
+                        await executeQuery("DELETE FROM usa_holidays");
 
                         for (const line of lines) {
                             const trimmed = line.trim();
@@ -71,7 +112,7 @@ function initTelegramBot(db) {
                                 if (match) {
                                     const [_, name, date, daysLeft] = match;
                                     const id = randomUUID();
-                                    await db.run(
+                                    await executeQuery(
                                         `INSERT INTO usa_holidays (id, name, date, days_left, priority_group, updatedAt) 
                                          VALUES (?, ?, ?, ?, ?, ?)`,
                                         [id, name.trim(), date, parseInt(daysLeft), currentGroup, new Date().toISOString()]
@@ -91,22 +132,20 @@ function initTelegramBot(db) {
                     if (text.toUpperCase().includes('TỪ KHÓA TÌM KIẾM')) {
                         const lines = text.split('\n');
                         
-                        // Extract keywords: ignore empty lines, header lines, and lines with emojis
+                        // Extract keywords: ignore empty lines and header lines
+                        // Improved: Strips 🔑 and other symbols instead of skipping the line
                         const keywords = lines
-                            .map(l => l.trim())
-                            .filter(l => l && !l.includes('🔑') && !l.toUpperCase().includes('TỪ KHÓA'));
+                            .map(l => l.trim().replace(/[🔑➡️📍✨]/g, '').trim())
+                            .filter(l => l && !l.toUpperCase().includes('TỪ KHÓA'));
 
                         if (keywords.length > 0) {
                             console.log(`📡 [Telegram] Processing ${keywords.length} keywords.`);
-
-                            // Optional: Clear old telegram-sourced entries if you want a fresh list every time
-                            // await db.run("DELETE FROM trending_keywords WHERE source = 'telegram' AND is_pinned = 0");
 
                             let addedCount = 0;
                             for (const kw of keywords) {
                                 const id = randomUUID();
                                 // INSERT OR IGNORE ensures no duplicates based on 'keyword' UNIQUE constraint
-                                const result = await db.run(
+                                const result = await executeQuery(
                                     `INSERT OR IGNORE INTO trending_keywords (id, keyword, heat_score, category, source) 
                                      VALUES (?, ?, ?, ?, ?)`,
                                     [id, kw, 85, 'general', 'telegram']
@@ -144,6 +183,7 @@ function initTelegramBot(db) {
         if (botInstance) {
             console.log('🤖 [Telegram] Stopping bot polling...');
             botInstance.stopPolling();
+            botInstance = null;
         }
     };
     process.on('SIGINT', shutdown);

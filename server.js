@@ -1498,7 +1498,7 @@ app.delete('/api/evergreen/:id', authenticateToken, requireAdmin, async (req, re
 });
 
 app.get('/api/trends', authenticateToken, async (req, res) => {
-    try { res.json(await db.all('SELECT * FROM trending_keywords ORDER BY is_pinned DESC, heat_score DESC LIMIT 50')); }
+    try { res.json(await db.all('SELECT * FROM trending_keywords ORDER BY is_pinned DESC, fetched_at DESC LIMIT 10')); }
     catch (e) { res.status(500).json({ error: e.message }); }
 });
 

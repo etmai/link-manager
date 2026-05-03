@@ -3435,8 +3435,11 @@ const TrendsAPI = {
     async deleteEvergreen(id)     {
         return API.fetch(`/api/evergreen/${id}`, { method: 'DELETE' });
     },
-    async analyze(id) {
-        return API.fetch(`/api/trends/analyze/${id}`, { method: 'POST' });
+    async analyze(keyword, type = 'trending') {
+        return API.fetch('/api/trends/analyze', { 
+            method: 'POST',
+            body: JSON.stringify({ keyword, type })
+        });
     },
     async refresh()               { 
         await renderTrendingNiches(); 
@@ -3596,9 +3599,10 @@ async function renderTrendingNiches() {
                     const cfabUrl = `https://www.creativefabrica.com/search/?query=${encodeURIComponent(kw.keyword)}&sortBy=newest`;
                     
                     let aiHtml = '<p style="opacity:0.6; font-style:italic;">Chưa có phân tích AI cho niche này.</p>';
-                    if (kw.ai_summary) {
+                    const aiData = kw.ai_analysis || kw.ai_summary;
+                    if (aiData) {
                         try {
-                            const ai = JSON.parse(kw.ai_summary);
+                            const ai = typeof aiData === 'string' ? JSON.parse(aiData) : aiData;
                             aiHtml = `
                                 <div class="ai-summary-content" style="font-size:0.85em; display:flex; flex-direction:column; gap:8px;">
                                     <div class="ai-meaning"><strong>💡 Ý nghĩa:</strong> ${ai.meaning || ''}</div>
@@ -3616,7 +3620,7 @@ async function renderTrendingNiches() {
                                 </div>
                             `;
                         } catch(e) { 
-                            aiHtml = `<p>${kw.ai_summary}</p>`; 
+                            aiHtml = `<p>${aiData}</p>`; 
                         }
                     }
 
@@ -3624,7 +3628,9 @@ async function renderTrendingNiches() {
                     <div class="dinoz-premium-list-item ${kw.is_pinned ? 'pinned-card' : ''}">
                         <div class="niche-card-header">
                             <div style="display:flex; flex-direction:column; gap:4px; width:100%;">
-                                <h4 class="niche-card-title">${catIcon} ${kw.keyword}</h4>
+                                <div style="display:flex; justify-content:space-between; align-items:start;">
+                                    <h4 class="niche-card-title">${catIcon} ${kw.keyword}</h4>
+                                </div>
                                 <button class="trend-copy-inline-btn" onclick="copyToClipboard('${kw.keyword.replace(/'/g,"\\'")}', this)">📋 Copy Keyword</button>
                             </div>
                             <span class="niche-card-category">${kw.category}</span>
@@ -3653,7 +3659,6 @@ async function renderTrendingNiches() {
                                 </div>
                                 <div class="quick-links-row">
                                     <a href="${cfabUrl}" target="_blank" class="trend-link-btn trend-cfab">CFab</a>
-                                    ${isAdmin ? `<button class="trend-link-btn btn-ai trend-analyze-btn" data-id="${kw.id}" style="background:linear-gradient(135deg, #3b82f6, #8b5cf6); border:none; color:white;">🤖 Analyze AI</button>` : ''}
                                     ${isAdmin ? `<button class="trend-link-btn btn-danger trend-delete-btn" data-id="${kw.id}">Xóa</button>` : ''}
                                 </div>
                             </div>
@@ -3663,19 +3668,16 @@ async function renderTrendingNiches() {
 
                 // Add Event Delegation for cards
                 container.onclick = async (e) => {
-                    const pinBtn = e.target.closest('.trend-pin-btn-float');
                     const deleteBtn = e.target.closest('.trend-delete-btn');
+                    const analyzeBtn = e.target.closest('.trend-analyze-btn');
                     
-                    if (pinBtn) {
-                        const id = pinBtn.dataset.id;
-                        await window.handlePinTrend(id);
-                    } else if (deleteBtn) {
+                    if (deleteBtn) {
                         const id = deleteBtn.dataset.id;
                         const keyword = deleteBtn.closest('.dinoz-premium-list-item').querySelector('.niche-card-title').textContent.split(' ').slice(1).join(' ');
                         window.openDeleteModal('trend', id, keyword);
                     } else if (analyzeBtn) {
-                        const id = analyzeBtn.dataset.id;
-                        await window.handleAnalyzeAi(id, analyzeBtn);
+                        const keyword = analyzeBtn.closest('.dinoz-premium-list-item').querySelector('.niche-card-title').textContent.split(' ').slice(1).join(' ');
+                        await window.handleAnalyzeAi(keyword, 'trending', analyzeBtn);
                     }
                 };
 
@@ -3769,15 +3771,36 @@ async function renderEvergreenKeywords() {
             const pinUrl = `https://www.pinterest.com/search/pins/?q=${q}&rs=shopping_filter&filter_location=1&domains=etsy.com&commerce_only=true`;
             const cfabUrl = `https://www.creativefabrica.com/search/?query=${encodeURIComponent(kw.keyword)}&sortBy=newest`;
 
+            let aiHtml = '<p style="opacity:0.6; font-style:italic; font-size:0.85em;">Chưa có phân tích AI.</p>';
+            if (kw.ai_analysis) {
+                try {
+                    const ai = typeof kw.ai_analysis === 'string' ? JSON.parse(kw.ai_analysis) : kw.ai_analysis;
+                    aiHtml = `
+                        <div class="ai-summary-content" style="font-size:0.8em; display:flex; flex-direction:column; gap:6px; opacity:0.9;">
+                            <div class="ai-meaning"><strong>💡 Ý nghĩa:</strong> ${ai.meaning || ''}</div>
+                            <div class="ai-products"><strong>📦 Sản phẩm:</strong> ${(ai.product_suggestions || []).slice(0,3).join(', ')}</div>
+                            <div class="ai-quotes"><strong>💬 Quotes:</strong> ${(ai.quotes || []).slice(0,2).join(' | ')}</div>
+                        </div>
+                    `;
+                } catch(e) { aiHtml = `<p style="font-size:0.8em;">${kw.ai_analysis}</p>`; }
+            }
+
             return `
             <div class="dinoz-premium-list-item" style="border-color: rgba(16, 185, 129, 0.2) !important;">
                 <div class="niche-card-header">
                     <div style="display:flex; flex-direction:column; gap:4px; width:100%;">
-                        <h4 class="niche-card-title">🌲 ${kw.keyword}</h4>
+                        <div style="display:flex; justify-content:space-between; align-items:start;">
+                            <h4 class="niche-card-title">🌲 ${kw.keyword}</h4>
+                            ${isAdmin ? `<button class="btn-ai evergreen-analyze-btn" data-keyword="${kw.keyword.replace(/'/g,"\\'")}" style="background:none; border:none; cursor:pointer; font-size:1.2em;" title="Analyze AI">🤖</button>` : ''}
+                        </div>
                         <button class="trend-copy-inline-btn" onclick="copyToClipboard('${kw.keyword.replace(/'/g,"\\'")}', this)">📋 Copy Keyword</button>
                     </div>
                 </div>
                 
+                <div class="niche-card-summary" style="margin: 10px 0; background:rgba(16,185,129,0.03); padding:10px; border-radius:8px; border:1px solid rgba(16,185,129,0.1);">
+                    ${aiHtml}
+                </div>
+
                 <div class="niche-card-footer" style="border-top: 1px solid rgba(16, 185, 129, 0.1);">
                     <div class="quick-links-group">
                         <div class="quick-links-row">
@@ -3797,10 +3820,15 @@ async function renderEvergreenKeywords() {
         // Add Event Delegation for Evergreen cards
         container.onclick = async (e) => {
             const deleteBtn = e.target.closest('.evergreen-delete-btn');
+            const analyzeBtn = e.target.closest('.evergreen-analyze-btn');
+            
             if (deleteBtn) {
                 const id = deleteBtn.dataset.id;
                 const keyword = deleteBtn.dataset.keyword;
                 window.openDeleteModal('evergreen', id, keyword);
+            } else if (analyzeBtn) {
+                const keyword = analyzeBtn.dataset.keyword;
+                await window.handleAnalyzeAi(keyword, 'evergreen', analyzeBtn);
             }
         };
 
@@ -4124,16 +4152,20 @@ async function handleSaveAiPrompt() {
     }
 }
 
-window.handleAnalyzeAi = async function(id, btn) {
-    if (!btn) return;
+window.handleAnalyzeAi = async function(keyword, type, btn) {
+    if (!btn || !keyword) return;
     const originalText = btn.innerHTML;
     btn.disabled = true;
-    btn.innerHTML = '⏳ Analyzing...';
+    btn.innerHTML = type === 'evergreen' ? '⏳' : '⏳ Analyzing...';
 
     try {
-        const res = await TrendsAPI.analyze(id);
-        showSuccess(`Phân tích thành công bằng ${res.provider}`);
-        renderTrendingNiches(); // Re-render to show summary
+        const res = await TrendsAPI.analyze(keyword, type);
+        showSuccess(`Phân tích thành công cho "${keyword}" bằng ${res.source || 'AI'}`);
+        if (type === 'evergreen') {
+            renderEvergreenKeywords();
+        } else {
+            renderTrendingNiches();
+        }
     } catch (err) {
         showError(err.message);
         btn.innerHTML = originalText;

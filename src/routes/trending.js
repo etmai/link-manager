@@ -130,9 +130,9 @@ module.exports = function (Router, db) {
             const rows = await db.trendingKeyword.findMany({
                 orderBy: [
                     { is_pinned: 'desc' },
-                    { heat_score: 'desc' },
+                    { fetched_at: 'desc' },
                 ],
-                take: 50,
+                take: 10,
             });
             res.json(rows);
         } catch (err) {
