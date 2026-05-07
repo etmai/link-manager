@@ -46,6 +46,7 @@ module.exports = function (Router, db) {
                 linksData: z.array(z.object({
                     url: z.string().url(),
                     date: z.string(),
+                    sampleDate: z.string().optional().nullable(),
                     categories: z.array(z.string()).optional().default([]),
                 })).min(1),
                 forceSaveCheckbox: z.boolean().optional().default(false),
@@ -59,7 +60,7 @@ module.exports = function (Router, db) {
 
             await db.$transaction(async (tx) => {
                 for (const item of linksData) {
-                    const { url, date, categories } = item;
+                    const { url, date, sampleDate, categories } = item;
                     const normalized = normalizeUrl(url);
                     const existing = await tx.link.findFirst({ where: { url: normalized } });
 
@@ -87,6 +88,8 @@ module.exports = function (Router, db) {
                                 where: { id: existing.id },
                                 data: {
                                     categories: JSON.stringify(merged),
+                                    date: date || existing.date,
+                                    sampleDate: sampleDate || existing.sampleDate,
                                     updatedAt: new Date().toISOString(),
                                     updatedBy: req.user.username,
                                 },
@@ -99,6 +102,7 @@ module.exports = function (Router, db) {
                             data: {
                                 url: normalized,
                                 date,
+                                sampleDate: sampleDate || null,
                                 categories: JSON.stringify(categories),
                                 createdAt: new Date().toISOString(),
                                 addedBy: req.user.username,
@@ -121,10 +125,11 @@ module.exports = function (Router, db) {
             const schema = z.object({
                 url: z.string().url().optional(),
                 date: z.string().optional(),
+                sampleDate: z.string().optional().nullable(),
                 categories: z.array(z.string()).optional(),
             });
 
-            const { url, date, categories } = schema.parse(req.body);
+            const { url, date, sampleDate, categories } = schema.parse(req.body);
             const { id } = req.params;
 
             // Check link exists
@@ -152,6 +157,7 @@ module.exports = function (Router, db) {
                 data: {
                     url: normalized,
                     date: date || existing.date,
+                    sampleDate: sampleDate !== undefined ? sampleDate : existing.sampleDate,
                     categories: categoriesStr,
                     updatedAt: new Date().toISOString(),
                     updatedBy: req.user.username,

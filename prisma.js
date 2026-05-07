@@ -7,7 +7,7 @@ const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient({
   datasources: {
     db: {
-      url: process.env.DATABASE_URL || `file:${require('path').join(__dirname, '../../database.sqlite')}`
+      url: process.env.DATABASE_URL || `file:${path.join(__dirname, 'database.sqlite')}`
     }
   },
   log: process.env.NODE_ENV === 'development'

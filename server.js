@@ -109,6 +109,7 @@ async function initDb() {
             id TEXT PRIMARY KEY,
             url TEXT NOT NULL,
             date TEXT NOT NULL,
+            sampleDate TEXT,
             categories TEXT NOT NULL,
             updatedAt TEXT,
             createdAt TEXT NOT NULL,
@@ -229,6 +230,9 @@ Lưu ý: Chỉ trả về JSON duy nhất, không thêm bất kỳ văn bản gi
     }
     if (!columnNames.includes('updatedBy')) {
         await db.run("ALTER TABLE links ADD COLUMN updatedBy TEXT");
+    }
+    if (!columnNames.includes('sampleDate')) {
+        await db.run("ALTER TABLE links ADD COLUMN sampleDate TEXT");
     }
 
     // Migration for work_schedule
@@ -523,16 +527,16 @@ app.post('/api/links/batch', authenticateToken, async (req, res) => {
                 const existing = dbLinks[existingIndex];
                 if (req.user.role === 'admin' || existing.addedBy === req.user.username) {
                     const mergedCats = [...new Set([...existing.categories, ...data.categories])];
-                    await db.run('UPDATE links SET date = ?, categories = ?, updatedAt = ?, updatedBy = ? WHERE id = ?',
-                        [data.date, JSON.stringify(mergedCats), new Date().toISOString(), req.user.username, existing.id]);
+                    await db.run('UPDATE links SET date = ?, sampleDate = ?, categories = ?, updatedAt = ?, updatedBy = ? WHERE id = ?',
+                        [data.date, data.sampleDate || null, JSON.stringify(mergedCats), new Date().toISOString(), req.user.username, existing.id]);
                     updatedCount++;
                 } else {
                     forbiddenCount++;
                 }
             } else if (existingIndex === -1) {
                 const newId = randomUUID();
-                await db.run('INSERT INTO links (id, url, date, categories, createdAt, addedBy) VALUES (?, ?, ?, ?, ?, ?)',
-                    [newId, data.url, data.date, JSON.stringify(data.categories), new Date().toISOString(), req.user.username]);
+                await db.run('INSERT INTO links (id, url, date, sampleDate, categories, createdAt, addedBy) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                    [newId, data.url, data.date, data.sampleDate || null, JSON.stringify(data.categories), new Date().toISOString(), req.user.username]);
                 newCount++;
             }
         }
@@ -548,7 +552,7 @@ app.post('/api/links/batch', authenticateToken, async (req, res) => {
 
 app.put('/api/links/:id', authenticateToken, async (req, res) => {
     const { id } = req.params;
-    const { url, date, categories } = req.body;
+    const { url, date, sampleDate, categories } = req.body;
     
     const link = await db.get('SELECT * FROM links WHERE id = ?', [id]);
     if (!link) return res.status(404).json({ error: "Không tìm thấy link!" });
@@ -558,8 +562,8 @@ app.put('/api/links/:id', authenticateToken, async (req, res) => {
         return res.status(403).json({ error: "Bạn không có quyền chỉnh sửa link của người khác!" });
     }
     
-    await db.run('UPDATE links SET url = ?, date = ?, categories = ?, updatedAt = ?, updatedBy = ? WHERE id = ?',
-        [url, date, JSON.stringify(categories), new Date().toISOString(), req.user.username, id]);
+    await db.run('UPDATE links SET url = ?, date = ?, sampleDate = ?, categories = ?, updatedAt = ?, updatedBy = ? WHERE id = ?',
+        [url, date, sampleDate || null, JSON.stringify(categories), new Date().toISOString(), req.user.username, id]);
     res.json({ success: true });
 });
 

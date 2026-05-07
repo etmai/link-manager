@@ -12,6 +12,23 @@ const { randomUUID } = require('crypto');
 async function initDatabase(prisma) {
     try {
         console.log('[DEBUG] Models:', Object.keys(prisma).filter(k => !k.startsWith('_') && !k.startsWith('$')));
+        
+        // Manual migration for sampleDate
+        try {
+            await prisma.$executeRawUnsafe(`ALTER TABLE links ADD COLUMN sampleDate TEXT`);
+            console.log('[MIGRATION] Added sampleDate column to links table.');
+        } catch (err) {
+            // Ignore error if column already exists
+        }
+
+        // Manual migration for sample category
+        try {
+            await prisma.$executeRawUnsafe(`ALTER TABLE sample_requests ADD COLUMN category TEXT`);
+            console.log('[MIGRATION] Added category column to sample_requests table.');
+        } catch (err) {
+            // Ignore if column already exists
+        }
+
         // Default admin user
         const admin = await prisma.user.findUnique({ where: { username: 'admin' } });
         if (!admin) {

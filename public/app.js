@@ -72,10 +72,10 @@ const API = {
             body: JSON.stringify({ linksData, forceSaveCheckbox })
         });
     },
-    async updateLink(id, url, date, categories) {
+    async updateLink(id, url, date, sampleDate, categories) {
         return API.fetch(`/api/links/${id}`, {
             method: 'PUT',
-            body: JSON.stringify({ url, date, categories })
+            body: JSON.stringify({ url, date, sampleDate, categories })
         });
     },
     async deleteLink(id) {
@@ -129,8 +129,8 @@ const API = {
 
     // SAMPLES
     async getSamples() { return API.fetch('/api/samples'); },
-    async addSample(designId) {
-        return API.fetch('/api/samples', { method: 'POST', body: JSON.stringify({ designId }) });
+    async addSample(designId, category) {
+        return API.fetch('/api/samples', { method: 'POST', body: JSON.stringify({ designId, category }) });
     },
     async updateSample(id, productLink) {
         return API.fetch(`/api/samples/${id}`, { method: 'PUT', body: JSON.stringify({ productLink }) });
@@ -259,6 +259,7 @@ const DOM = {
 
     totalLinks: document.getElementById('total-links'),
     filterCategory: document.getElementById('filter-category'),
+    filterSampleDate: document.getElementById('filter-sample-date'),
     searchInput: document.getElementById('search-input'),
     monthStatsContainer: document.getElementById('month-stats-container'),
     btnClearMonthFilter: document.getElementById('btn-clear-month-filter'),
@@ -273,6 +274,7 @@ const DOM = {
     addLinkForm: document.getElementById('add-link-form'),
     linkUrlsInput: document.getElementById('link-urls'),
     linkDateInput: document.getElementById('link-date'),
+    linkSampleDateInput: document.getElementById('link-sample-date'),
     linkCategories: document.getElementById('link-categories'),
     duplicateWarnings: document.getElementById('duplicate-warnings'),
     forceSaveLabel: document.getElementById('force-save-label'),
@@ -282,6 +284,7 @@ const DOM = {
     closeModalBtns: document.querySelectorAll('.btn-close-modal'),
     modalPassword: document.getElementById('modal-password'),
     modalEditLink: document.getElementById('modal-edit-link'),
+    editLinkSampleDate: document.getElementById('edit-link-sample-date'),
     modalManageCats: document.getElementById('modal-manage-cats'),
     modalUniversalRename: document.getElementById('modal-universal-rename'),
     modalConfirmDelete: document.getElementById('modal-confirm-delete'),
@@ -328,6 +331,7 @@ const DOM = {
     samplesTableBody: document.getElementById('samples-table-body'),
     addSampleForm: document.getElementById('add-sample-form'),
     sampleDesignIdInput: document.getElementById('sample-design-id'),
+    sampleCategoryInput: document.getElementById('sample-category'),
     sampleSearchInput: document.getElementById('sample-search-input'),
     sampleAdminColHead: document.getElementById('sample-admin-col-head'),
 
@@ -1060,6 +1064,8 @@ function setupEventListeners() {
 
     // --- CÁC SỰ KIỆN KHÁC (INPUT, MODALS) ---
     DOM.searchInput?.addEventListener('input', debounce(renderLinks, 300));
+    DOM.filterCategory?.addEventListener('change', () => { currentPage = 1; renderLinks(); });
+    DOM.filterSampleDate?.addEventListener('change', () => { currentPage = 1; renderLinks(); });
     DOM.sampleSearchInput?.addEventListener('input', debounce(renderSamplesTable, 300));
 
     // Bulk actions listeners
@@ -1388,15 +1394,32 @@ function renderCategoryCheckboxes(containerSelector) {
     }
 }
 
-function renderFilterCategories() {
+async function renderFilterCategories() {
     const currentVal = DOM.filterCategory.value;
     DOM.filterCategory.innerHTML = '<option value="ALL">Lọc: Tất cả danh mục</option>';
+    
+    // Also populate sample category dropdown if it exists
+    const currentSampleCat = DOM.sampleCategoryInput?.value || '';
+    if (DOM.sampleCategoryInput) {
+        DOM.sampleCategoryInput.innerHTML = '<option value="">Chọn danh mục...</option>';
+    }
+
     cachedCategories.forEach(c => {
         const opt = document.createElement('option');
         opt.value = c; opt.textContent = c;
         DOM.filterCategory.appendChild(opt);
+
+        if (DOM.sampleCategoryInput) {
+            const optSample = document.createElement('option');
+            optSample.value = c; optSample.textContent = c;
+            DOM.sampleCategoryInput.appendChild(optSample);
+        }
     });
+
     if (cachedCategories.includes(currentVal)) DOM.filterCategory.value = currentVal;
+    if (DOM.sampleCategoryInput && cachedCategories.includes(currentSampleCat)) {
+        DOM.sampleCategoryInput.value = currentSampleCat;
+    }
 }
 
 async function renderManageCategoriesTable() {
@@ -1553,12 +1576,14 @@ async function handleSaveLinks(e) {
     }
 
     const inputDate = DOM.linkDateInput.value;
-    const linksData = urls.map(url => ({ url, date: inputDate, categories: selectedCats }));
+    const sampleDate = DOM.linkSampleDateInput.value;
+    const linksData = urls.map(url => ({ url, date: inputDate, sampleDate: sampleDate, categories: selectedCats }));
     const forceSaveCheckbox = DOM.forceSaveCheckbox.checked;
 
     try {
         const result = await API.saveLinks(linksData, forceSaveCheckbox);
         DOM.linkUrlsInput.value = '';
+        DOM.linkSampleDateInput.value = '';
         DOM.forceSaveCheckbox.checked = false;
         currentDuplicates = [];
         DOM.duplicateWarnings.classList.add('hidden');
@@ -1625,6 +1650,7 @@ let selectedLinkIds = new Set();
 function getFilteredLinks() {
     const searchVal = DOM.searchInput?.value.toLowerCase().trim() || '';
     const catFilter = DOM.filterCategory?.value || 'ALL';
+    const sampleDateFilter = DOM.filterSampleDate?.value || '';
     
     return cachedLinks.filter(l => {
         const searchTerms = searchVal.split(/\s+/);
@@ -1632,7 +1658,9 @@ function getFilteredLinks() {
         const catMatch = l.categories.some(c => searchTerms.every(term => c.toLowerCase().includes(term)));
         
         const categoryFilterMatch = (catFilter === 'ALL' || l.categories.includes(catFilter));
-        return (urlMatch || catMatch) && categoryFilterMatch;
+        const sampleDateMatch = !sampleDateFilter || l.sampleDate === sampleDateFilter;
+        
+        return (urlMatch || catMatch) && categoryFilterMatch && sampleDateMatch;
     });
 }
 
@@ -1680,6 +1708,7 @@ function renderLinks() {
             </td>
             <td><a href="${l.url}" target="_blank" class="url-text">${l.url}</a></td>
             <td><span class="date-text" style="color:#e2e8f0">${l.date}</span></td>
+            <td><span class="date-text" style="color:#94a3b8">${l.sampleDate || '—'}</span></td>
             <td><span class="date-text" style="font-size:0.85em;">${addedBy}</span></td>
             <td><span class="date-text" style="font-size:0.85em;">${updatedBy}</span></td>
             <td>${tagsHtml}</td>
@@ -1715,6 +1744,7 @@ window.openEditLink = function(id) {
     document.getElementById('edit-link-id').value = link.id;
     document.getElementById('edit-link-url').value = link.url;
     document.getElementById('edit-link-date').value = link.date;
+    document.getElementById('edit-link-sample-date').value = link.sampleDate || '';
 
     renderCategoryCheckboxes('#edit-link-categories');
     document.querySelectorAll('#edit-link-categories .cat-checkbox').forEach(cb => {
@@ -1728,13 +1758,14 @@ async function saveEditedLink() {
     const id = document.getElementById('edit-link-id').value;
     const url = document.getElementById('edit-link-url').value.trim();
     const date = document.getElementById('edit-link-date').value;
+    const sampleDate = document.getElementById('edit-link-sample-date').value;
     const selectedCats = Array.from(document.querySelectorAll('#edit-link-categories .cat-checkbox:checked')).map(cb => cb.value);
 
     if (!url) { showError('URL không được trống!'); return; }
     if (selectedCats.length === 0) { showError('Chọn danh mục!'); return; }
 
     try {
-        await API.updateLink(id, url, date, selectedCats);
+        await API.updateLink(id, url, date, sampleDate, selectedCats);
         cachedLinks = await API.getLinks();
         closeAllModals();
         renderAppContent();
@@ -3238,7 +3269,8 @@ async function renderSamplesTable() {
     const searchKey = DOM.sampleSearchInput?.value.toLowerCase().trim() || '';
     const filtered = cachedSamples.filter(s => {
         const designId = s.designId || '';
-        return designId.toLowerCase().includes(searchKey);
+        const cat = s.category || '';
+        return designId.toLowerCase().includes(searchKey) || cat.toLowerCase().includes(searchKey);
     });
 
     filtered.forEach(s => {
@@ -3247,16 +3279,15 @@ async function renderSamplesTable() {
 
         let statusCell = '';
         if (hasLink) {
-            statusCell = `<a href="${s.productLink}" target="_blank" title="${s.productLink}" style="font-size: 1.4em; text-decoration: none; display:inline-flex; align-items:center;">🔗</a>`;
-        } else if (s.status === 'Process') {
-            if (isAdmin) {
-                statusCell = `<button class="btn-small btn-primary btn-add-link" data-id="${s.id}" data-link="N/A">Add</button>`;
-            } else {
-                statusCell = `<span class="tag tag-warning">Process</span>`;
-            }
+            statusCell = `<a href="${s.productLink}" target="_blank" title="${s.productLink}" class="btn-icon-premium" style="text-decoration: none; padding: 4px 8px;">
+                <span style="font-size: 1.2em;">🔗</span>
+                <span style="font-size: 0.8em; margin-left: 4px;">Xem Link</span>
+            </a>`;
         } else {
-            const statusClass = s.status === 'Live' ? 'tag-success' : '';
-            statusCell = `<span class="tag ${statusClass}">${s.status}</span>`;
+            // "Request Link" button for both admin and user if no link exists
+            statusCell = `<button class="btn-small btn-primary btn-add-link" data-id="${s.id}" data-link="N/A" style="background: var(--accent-color); border-radius: 6px; padding: 4px 10px;">
+                🚀 Request Link
+            </button>`;
         }
 
         let adminActions = '';
@@ -3272,11 +3303,11 @@ async function renderSamplesTable() {
         }
 
         tr.innerHTML = `
-            <td><span class="date-text">${s.requestDate}</span></td>
-            <td style="font-weight:600; color:var(--accent-color);">${s.designId}</td>
-            <td>${s.requester}</td>
+            <td><span class="date-text" style="color: var(--accent-color); font-weight: 600;">${s.designId}</span></td>
+            <td><span class="tag" style="background:rgba(52, 211, 153, 0.1); color:#34d399; border:1px solid rgba(52, 211, 153, 0.2);">${s.category || '—'}</span></td>
+            <td><span class="date-text" style="opacity: 0.7;">${s.requestDate}</span></td>
+            <td><span style="font-size: 0.9em; opacity: 0.8;">${s.requester}</span></td>
             <td>${statusCell}</td>
-            <td>${s.expiryDate}</td>
             ${isAdmin || (user && s.requester === user.username) ? adminActions : ''}
         `;
         
@@ -3286,12 +3317,14 @@ async function renderSamplesTable() {
 
 async function handleAddSample(e) {
     if (e) e.preventDefault();
-    const designId = DOM.sampleDesignIdInput.value.trim();
+    const designId = DOM.sampleDesignIdInput.value;
+    const category = DOM.sampleCategoryInput.value;
     if (!designId) return;
     try {
-        await API.addSample(designId);
+        await API.addSample(designId, category);
         DOM.sampleDesignIdInput.value = '';
-        alert('✅ Gửi yêu cầu thành công!');
+        DOM.sampleCategoryInput.value = '';
+        showSuccess('✅ Lưu mẫu thành công!');
         cachedSamples = await API.getSamples();
         renderSamplesTable();
     } catch (err) { showError(err.message); }

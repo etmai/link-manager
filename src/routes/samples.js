@@ -38,25 +38,19 @@ module.exports = function (Router, db) {
     router.post('/api/samples', authenticateToken, async (req, res) => {
         try {
             const { username: currentUser } = req.user;
-            const { designId } = req.body;
+            const { designId, category } = req.body;
 
             if (!designId) {
                 return res.status(400).json({ error: 'designId is required.' });
             }
 
-            // Check unique: one sample per designId (global)
-            const existing = await db.sampleRequest.findFirst({
-                where: { designId },
-            });
-            if (existing) {
-                return res.status(409).json({ error: 'Sample request for this design already exists.' });
-            }
 
             const now = new Date().toISOString();
 
             const sample = await db.sampleRequest.create({
                 data: {
                     designId,
+                    category,
                     requester: currentUser,
                     requestDate: now.split('T')[0],
                     status: 'Process',

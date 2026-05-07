@@ -133,6 +133,10 @@
                                     <label>Ngày nhập</label>
                                     <input type="date" id="link-date" required>
                                 </div>
+                                <div class="input-group flex-1">
+                                    <label>Mẫu Ngày</label>
+                                    <input type="date" id="link-sample-date">
+                                </div>
                             </div>
                             <div class="input-group">
                                 <label>Chọn danh mục (Có thể check chọn nhiều)</label>
@@ -161,6 +165,7 @@
                         <div class="filter-bar">
                             <input type="text" id="search-input" placeholder="Tìm kiếm link...">
                             <select id="filter-category"><option value="ALL">Tất cả danh mục</option></select>
+                            <input type="date" id="filter-sample-date" title="Lọc Mẫu Ngày" style="padding: 8px 12px; border-radius: 8px; background: var(--input-bg); border: 1px solid var(--border-color); color: var(--text-primary); font-size: 0.9em;">
                             <select id="items-per-page">
                                 <option value="25">25 dòng</option>
                                 <option value="50">50 dòng</option>
@@ -177,6 +182,7 @@
                                         </th>
                                         <th>URL</th>
                                         <th>Ngày Nhập</th>
+                                        <th>Mẫu Ngày</th>
                                         <th>Người Thêm</th>
                                         <th>Người Sửa</th>
                                         <th>Danh Mục</th>
@@ -628,15 +634,21 @@
             <div id="samples-tab" class="tab-content">
                 <div class="content-wrapper">
                     <div class="add-link-section glass-panel">
-                        <h3>🔬 Yêu Cầu Link Sản Phẩm</h3>
+                        <h3>🔬 Nhập Mẫu Design</h3>
                         <form id="add-sample-form">
                             <div class="form-row">
-                                <div class="input-group flex-2">
-                                    <label>Mã Design</label>
-                                    <input type="text" id="sample-design-id" placeholder="VD: DINOZ-2024-001" required>
+                                <div class="input-group flex-1">
+                                    <label>Ngày Design</label>
+                                    <input type="date" id="sample-design-id" required>
                                 </div>
-                                <div class="form-actions" style="margin-top: 0;">
-                                    <button type="submit" class="btn-primary">Gửi Yêu Cầu</button>
+                                <div class="input-group flex-1">
+                                    <label>Danh mục</label>
+                                    <select id="sample-category" class="premium-select">
+                                        <option value="">Chọn danh mục...</option>
+                                    </select>
+                                </div>
+                                <div class="form-actions" style="margin-top: 24px;">
+                                    <button type="submit" class="btn-primary">Lưu Mẫu</button>
                                 </div>
                             </div>
                         </form>
@@ -652,11 +664,11 @@
                             <table class="modern-table">
                                 <thead>
                                     <tr>
-                                        <th>Ngày Yêu Cầu</th>
-                                        <th>Mã Design</th>
-                                        <th>Người Yêu Cầu</th>
+                                        <th>Ngày Design</th>
+                                        <th>Danh mục</th>
+                                        <th>Ngày Nhập</th>
+                                        <th>Người Nhập</th>
                                         <th>Trạng Thái</th>
-                                        <th>Ngày Hết Hạn</th>
                                         <th id="sample-admin-col-head" class="hidden">Thao Tác</th>
                                     </tr>
                                 </thead>
@@ -986,6 +998,7 @@
             <input type="hidden" id="edit-link-id">
             <div class="input-group"><label>URL</label><input type="text" id="edit-link-url" required></div>
             <div class="input-group"><label>Ngày</label><input type="date" id="edit-link-date" required></div>
+            <div class="input-group"><label>Mẫu Ngày</label><input type="date" id="edit-link-sample-date"></div>
             <div class="input-group"><label>Danh mục</label><div class="checkbox-group" id="edit-link-categories"></div></div>
             <div class="modal-actions"><button type="button" class="btn-secondary btn-close-modal">Hủy</button><button type="button" class="btn-primary" id="btn-save-edit-link">Lưu</button></div>
         </div>
@@ -1120,7 +1133,7 @@
         </div>
     </div>
     <!-- Bắt buộc load JS phiên bản mới (Bypass Cache) -->
-    <script src="app.js?v=16.4.0"></script>
+    <script src="app.js?v=16.4.3"></script>
 </body>
 
 </html>

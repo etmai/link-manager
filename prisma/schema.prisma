@@ -46,6 +46,7 @@ model Link {
   id         String  @id @default(uuid())
   url        String
   date       String
+  sampleDate String?
   categories String  @default("[]")
   updatedAt  String?
   createdAt  String
@@ -119,6 +120,7 @@ model SampleRequest {
   status      String  @default("Process")
   productLink String  @default("N/A")
   expiryDate  String  @default("N/A")
+  category    String?
   createdAt   String
   user        User?   @relation(fields: [requester], references: [username])
   @@map("sample_requests")
