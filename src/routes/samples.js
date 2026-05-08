@@ -53,7 +53,7 @@ module.exports = function (Router, db) {
                     category,
                     requester: currentUser,
                     requestDate: now.split('T')[0],
-                    status: 'Process',
+                    status: 'New',
                     productLink: 'N/A',
                     expiryDate: 'N/A',
                     createdAt: now,
@@ -63,7 +63,7 @@ module.exports = function (Router, db) {
             res.status(201).json({ id: sample.id, message: 'Sample request created.' });
         } catch (err) {
             console.error('[Samples] POST error:', err);
-            res.status(500).json({ error: 'Failed to create sample request.' });
+            res.status(500).json({ error: `Failed to create sample request: ${err.message}` });
         }
     });
 
@@ -97,6 +97,31 @@ module.exports = function (Router, db) {
         } catch (err) {
             console.error('[Samples] PUT error:', err);
             res.status(500).json({ error: 'Failed to update sample request.' });
+        }
+    });
+
+    // ─── POST /api/samples/:id/request ────────────────────────────
+    router.post('/api/samples/:id/request', authenticateToken, async (req, res) => {
+        try {
+            const { id } = req.params;
+            const { username: currentUser, role } = req.user;
+
+            const sample = await db.sampleRequest.findUnique({ where: { id } });
+            if (!sample) return res.status(404).json({ error: 'Sample not found.' });
+
+            const isAdmin = role === 'admin';
+            const isOwner = sample.requester === currentUser;
+            if (!isAdmin && !isOwner) return res.status(403).json({ error: 'Not authorized.' });
+
+            await db.sampleRequest.update({
+                where: { id },
+                data: { status: 'Process' }
+            });
+
+            res.json({ message: 'Sample link requested.' });
+        } catch (err) {
+            console.error('[Samples] REQUEST error:', err);
+            res.status(500).json({ error: 'Failed to request sample link.' });
         }
     });
 

@@ -641,11 +641,11 @@
                                     <label>Ngày Design</label>
                                     <input type="date" id="sample-design-id" required>
                                 </div>
-                                <div class="input-group flex-1">
+                                <div class="input-group flex-2">
                                     <label>Danh mục</label>
-                                    <select id="sample-category" class="premium-select">
-                                        <option value="">Chọn danh mục...</option>
-                                    </select>
+                                    <div id="sample-categories" class="checkbox-group" style="margin-top: 8px;">
+                                        <!-- Categories will be loaded here -->
+                                    </div>
                                 </div>
                                 <div class="form-actions" style="margin-top: 24px;">
                                     <button type="submit" class="btn-primary">Lưu Mẫu</button>
@@ -1133,7 +1133,7 @@
         </div>
     </div>
     <!-- Bắt buộc load JS phiên bản mới (Bypass Cache) -->
-    <script src="app.js?v=16.4.3"></script>
+    <script src="app.js?v=16.4.5"></script>
 </body>
 
 </html>

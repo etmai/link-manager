@@ -138,6 +138,9 @@ const API = {
     async deleteSample(id) {
         return API.fetch(`/api/samples/${id}`, { method: 'DELETE' });
     },
+    async requestSampleLink(id) {
+        return API.fetch(`/api/samples/${id}/request`, { method: 'POST' });
+    },
     async cleanupExpiredSamples() {
         return API.fetch('/api/samples/cleanup-expired', { method: 'POST' });
     },
@@ -331,7 +334,7 @@ const DOM = {
     samplesTableBody: document.getElementById('samples-table-body'),
     addSampleForm: document.getElementById('add-sample-form'),
     sampleDesignIdInput: document.getElementById('sample-design-id'),
-    sampleCategoryInput: document.getElementById('sample-category'),
+    sampleCategories: document.getElementById('sample-categories'),
     sampleSearchInput: document.getElementById('sample-search-input'),
     sampleAdminColHead: document.getElementById('sample-admin-col-head'),
 
@@ -505,13 +508,13 @@ function showToast(msg, type = 'error') {
     const toast = document.createElement('div');
     const bg = type === 'success' ? '#16a34a' : type === 'info' ? '#2563eb' : '#dc2626';
     toast.style.cssText = `background:${bg};color:#fff;padding:12px 18px;border-radius:10px;font-size:0.92em;max-width:320px;box-shadow:0 4px 16px rgba(0,0,0,0.25);opacity:0;transform:translateX(40px);transition:all 0.25s ease;`;
-    toast.textContent = msg;
+    toast.innerHTML = msg;
     container.appendChild(toast);
     requestAnimationFrame(() => { toast.style.opacity = '1'; toast.style.transform = 'translateX(0)'; });
     setTimeout(() => {
         toast.style.opacity = '0'; toast.style.transform = 'translateX(40px)';
         setTimeout(() => toast.remove(), 300);
-    }, 3500);
+    }, 6000);
 }
 
 function showError(msg) {
@@ -739,7 +742,7 @@ function setupEventListeners() {
         const newP = document.getElementById('new-pass').value;
         try {
             await API.changePassword(oldP, newP);
-            alert('✅ Đổi mật khẩu thành công!');
+            showSuccess('Đổi mật khẩu thành công!');
             closeAllModals();
         } catch (err) {
             showError(err.message);
@@ -1033,6 +1036,20 @@ function setupEventListeners() {
         if (btn.classList.contains('btn-add-link') || btn.classList.contains('btn-edit-sample')) {
             const link = btn.getAttribute('data-link') || 'N/A';
             if (id) window.handleEditSampleLink(id, link);
+            return;
+        } else if (btn.classList.contains('btn-request-link')) {
+            if (id) {
+                API.requestSampleLink(id)
+                   .then(() => {
+                       showSuccess('Đã gửi yêu cầu cho Admin!');
+                       return API.getSamples();
+                   })
+                   .then(samples => {
+                       cachedSamples = samples;
+                       renderSamplesTable();
+                   })
+                   .catch(err => showError(err.message));
+            }
             return;
         } else if (btn.classList.contains('btn-delete-sample')) {
             if (id) window.handleDeleteSample(id);
@@ -1398,10 +1415,9 @@ async function renderFilterCategories() {
     const currentVal = DOM.filterCategory.value;
     DOM.filterCategory.innerHTML = '<option value="ALL">Lọc: Tất cả danh mục</option>';
     
-    // Also populate sample category dropdown if it exists
-    const currentSampleCat = DOM.sampleCategoryInput?.value || '';
-    if (DOM.sampleCategoryInput) {
-        DOM.sampleCategoryInput.innerHTML = '<option value="">Chọn danh mục...</option>';
+    // Also populate sample category checkboxes
+    if (DOM.sampleCategories) {
+        DOM.sampleCategories.innerHTML = '';
     }
 
     cachedCategories.forEach(c => {
@@ -1409,17 +1425,19 @@ async function renderFilterCategories() {
         opt.value = c; opt.textContent = c;
         DOM.filterCategory.appendChild(opt);
 
-        if (DOM.sampleCategoryInput) {
-            const optSample = document.createElement('option');
-            optSample.value = c; optSample.textContent = c;
-            DOM.sampleCategoryInput.appendChild(optSample);
+        if (DOM.sampleCategories) {
+            const label = document.createElement('label');
+            label.className = 'checkbox-item';
+            const bgColor = getCategoryColor(c);
+            const borderColor = bgColor.replace('0.2', '0.4');
+            label.style.background = bgColor;
+            label.style.border = `1px solid ${borderColor}`;
+            label.innerHTML = `<input type="checkbox" class="cat-checkbox" value="${c}"> <span style="font-weight:500;">${c}</span>`;
+            DOM.sampleCategories.appendChild(label);
         }
     });
 
     if (cachedCategories.includes(currentVal)) DOM.filterCategory.value = currentVal;
-    if (DOM.sampleCategoryInput && cachedCategories.includes(currentSampleCat)) {
-        DOM.sampleCategoryInput.value = currentSampleCat;
-    }
 }
 
 async function renderManageCategoriesTable() {
@@ -1597,7 +1615,7 @@ async function handleSaveLinks(e) {
         if (result.forbiddenCount > 0) {
             msg += `\n⚠️ Có ${result.forbiddenCount} link không thể cập nhật vì bạn không phải người tạo (và không phải Admin).`;
         }
-        alert(msg);
+        showSuccess(msg.replace(/\n/g, '<br>'));
     } catch (err) { showError(err.message); }
 }
 
@@ -2129,9 +2147,9 @@ window.debugSchema = async function() {
         const schema = await API.fetch('/api/debug/schema');
         console.table(schema.sales_entries || []);
         const cols = (schema.sales_entries || []).map(c => c.name).join(', ');
-        alert('sales_entries columns:\n' + cols);
+        showToast('sales_entries columns:<br>' + cols, 'info');
     } catch(e) {
-        alert('Error: ' + e.message);
+        showError('Error: ' + e.message);
     }
 };
 
@@ -2286,12 +2304,12 @@ window.setChartRange = function(days) {
 window.applyCustomChartRange = function() {
     const start = document.getElementById('chart-start-date').value;
     const end = document.getElementById('chart-end-date').value;
-    if (!start || !end) return alert("Vui lòng chọn đầy đủ ngày bắt đầu và kết thúc.");
-    if (new Date(start) > new Date(end)) return alert("Ngày bắt đầu không được lớn hơn ngày kết thúc.");
+    if (!start || !end) return showError("Vui lòng chọn đầy đủ ngày bắt đầu và kết thúc.");
+    if (new Date(start) > new Date(end)) return showError("Ngày bắt đầu không được lớn hơn ngày kết thúc.");
     
     const diffTime = Math.abs(new Date(end) - new Date(start));
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-    if (diffDays > 180) return alert("Chỉ hỗ trợ xem tối đa 180 ngày.");
+    if (diffDays > 180) return showError("Chỉ hỗ trợ xem tối đa 180 ngày.");
 
     currentChartRange = 'custom';
     customChartStart = start;
@@ -3277,17 +3295,41 @@ async function renderSamplesTable() {
         const tr = document.createElement('tr');
         const hasLink = s.productLink && s.productLink !== 'N/A';
 
+        let catsArr = [];
+        try {
+            catsArr = JSON.parse(s.category || '[]');
+        } catch (e) {
+            catsArr = s.category ? [s.category] : [];
+        }
+
+        const tagsHtml = catsArr.map(c => `<span class="tag" style="background:rgba(52, 211, 153, 0.1); color:#34d399; border:1px solid rgba(52, 211, 153, 0.2); font-size: 0.8em; margin: 2px;">${c}</span>`).join('');
+
         let statusCell = '';
-        if (hasLink) {
+        if (s.status === 'Live' && hasLink) {
             statusCell = `<a href="${s.productLink}" target="_blank" title="${s.productLink}" class="btn-icon-premium" style="text-decoration: none; padding: 4px 8px;">
                 <span style="font-size: 1.2em;">🔗</span>
                 <span style="font-size: 0.8em; margin-left: 4px;">Xem Link</span>
             </a>`;
         } else {
-            // "Request Link" button for both admin and user if no link exists
-            statusCell = `<button class="btn-small btn-primary btn-add-link" data-id="${s.id}" data-link="N/A" style="background: var(--accent-color); border-radius: 6px; padding: 4px 10px;">
-                🚀 Request Link
-            </button>`;
+            if (isAdmin) {
+                // Admin always sees "Input Link" if not Live
+                statusCell = `<button class="btn-small btn-primary btn-add-link" data-id="${s.id}" data-link="N/A" style="background: #10b981; border-radius: 6px; padding: 4px 10px;">
+                    ✍️ Input Link
+                </button>`;
+            } else {
+                // User logic
+                if (s.status === 'New') {
+                    statusCell = `<button class="btn-small btn-primary btn-request-link" data-id="${s.id}" style="background: var(--accent-color); border-radius: 6px; padding: 4px 10px;">
+                        🚀 Request Link
+                    </button>`;
+                } else if (s.status === 'Process') {
+                    statusCell = `<span class="tag" style="background: rgba(245, 158, 11, 0.1); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.2); padding: 4px 10px; border-radius: 6px;">
+                        ⏳ Processing...
+                    </span>`;
+                } else {
+                    statusCell = `<span class="tag">${s.status}</span>`;
+                }
+            }
         }
 
         let adminActions = '';
@@ -3304,7 +3346,7 @@ async function renderSamplesTable() {
 
         tr.innerHTML = `
             <td><span class="date-text" style="color: var(--accent-color); font-weight: 600;">${s.designId}</span></td>
-            <td><span class="tag" style="background:rgba(52, 211, 153, 0.1); color:#34d399; border:1px solid rgba(52, 211, 153, 0.2);">${s.category || '—'}</span></td>
+            <td>${tagsHtml || '—'}</td>
             <td><span class="date-text" style="opacity: 0.7;">${s.requestDate}</span></td>
             <td><span style="font-size: 0.9em; opacity: 0.8;">${s.requester}</span></td>
             <td>${statusCell}</td>
@@ -3318,12 +3360,13 @@ async function renderSamplesTable() {
 async function handleAddSample(e) {
     if (e) e.preventDefault();
     const designId = DOM.sampleDesignIdInput.value;
-    const category = DOM.sampleCategoryInput.value;
+    const selectedCats = Array.from(DOM.sampleCategories.querySelectorAll('.cat-checkbox:checked')).map(cb => cb.value);
+    
     if (!designId) return;
     try {
-        await API.addSample(designId, category);
+        await API.addSample(designId, JSON.stringify(selectedCats));
         DOM.sampleDesignIdInput.value = '';
-        DOM.sampleCategoryInput.value = '';
+        DOM.sampleCategories.querySelectorAll('.cat-checkbox').forEach(cb => cb.checked = false);
         showSuccess('✅ Lưu mẫu thành công!');
         cachedSamples = await API.getSamples();
         renderSamplesTable();
