@@ -10,7 +10,8 @@ console.log('[BOOT] Loading .env from:', envPath);
 require('dotenv').config({ path: envPath });
 
 // Ensure DATABASE_URL is set (used by Prisma)
-if (!process.env.DATABASE_URL) {
+const dbUrl = process.env.DATABASE_URL || '';
+if (!dbUrl || (process.platform === 'win32' && dbUrl.includes('/root/'))) {
   process.env.DATABASE_URL = `file:${path.join(__dirname, '..', 'database.sqlite')}`;
 }
 console.log('[BOOT] DATABASE_URL:', process.env.DATABASE_URL);

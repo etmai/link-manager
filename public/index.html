@@ -657,7 +657,11 @@
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap: wrap; gap: 10px;">
                             <h3>📋 Danh Sách Yêu Cầu Mẫu</h3>
                             <div class="filter-bar" style="margin:0; background:none; padding:0;">
-                                <input type="text" id="sample-search-input" placeholder="Tìm kiếm Mã Design..." style="width: 250px;">
+                                <div style="display:flex; align-items:center; gap:5px;">
+                                    <label style="font-size:0.8em; color:var(--text-secondary);">Ngày Design:</label>
+                                    <input type="date" id="sample-search-input" style="width: 160px; padding: 6px 10px;">
+                                    <button class="btn-small" onclick="document.getElementById('sample-search-input').value=''; renderSamplesTable();" style="margin:0; padding: 4px 8px;" title="Xóa lọc">🔄</button>
+                                </div>
                             </div>
                         </div>
                         <div class="table-container">
@@ -669,6 +673,7 @@
                                         <th>Ngày Nhập</th>
                                         <th>Người Nhập</th>
                                         <th>Trạng Thái</th>
+                                        <th>Ngày Hết Hạn</th>
                                         <th id="sample-admin-col-head" class="hidden">Thao Tác</th>
                                     </tr>
                                 </thead>

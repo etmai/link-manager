@@ -159,7 +159,7 @@ module.exports = function (Router, db) {
 
             const result = await db.$executeRaw`
                 UPDATE sample_requests
-                SET status = 'Process', productLink = 'N/A', expiryDate = 'N/A'
+                SET status = 'New', productLink = 'N/A', expiryDate = 'N/A'
                 WHERE expiryDate < ${today} AND expiryDate != 'N/A'
             `;
 

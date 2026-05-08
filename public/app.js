@@ -635,6 +635,8 @@ async function loadAppData() {
         renderCategoriesFullTable();
         updateSalesDropdowns();
         renderSchedule();
+        const _u = getCurrentUser();
+        if (_u && _u.role === 'admin') API.cleanupExpiredSamples().catch(e => {});
     } catch (err) {
         console.error("Failed to load app data:", err);
         showError('Không thể tải dữ liệu: ' + err.message);
@@ -3284,11 +3286,12 @@ async function renderSamplesTable() {
         DOM.sampleAdminColHead?.classList.add('hidden');
     }
 
-    const searchKey = DOM.sampleSearchInput?.value.toLowerCase().trim() || '';
+    const searchKey = DOM.sampleSearchInput?.value.trim() || '';
     const filtered = cachedSamples.filter(s => {
+        if (!searchKey) return true;
         const designId = s.designId || '';
-        const cat = s.category || '';
-        return designId.toLowerCase().includes(searchKey) || cat.toLowerCase().includes(searchKey);
+        // Exact match for date or includes for flexibility
+        return designId === searchKey;
     });
 
     filtered.forEach(s => {
@@ -3306,28 +3309,33 @@ async function renderSamplesTable() {
 
         let statusCell = '';
         if (s.status === 'Live' && hasLink) {
-            statusCell = `<a href="${s.productLink}" target="_blank" title="${s.productLink}" class="btn-icon-premium" style="text-decoration: none; padding: 4px 8px;">
+            statusCell = `<a href="${s.productLink}" target="_blank" title="Xem Link: ${s.productLink}" class="btn-icon-premium glow-link" style="text-decoration: none; padding: 6px; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 8px;">
                 <span style="font-size: 1.2em;">🔗</span>
-                <span style="font-size: 0.8em; margin-left: 4px;">Xem Link</span>
             </a>`;
         } else {
             if (isAdmin) {
-                // Admin always sees "Input Link" if not Live
-                statusCell = `<button class="btn-small btn-primary btn-add-link" data-id="${s.id}" data-link="N/A" style="background: #10b981; border-radius: 6px; padding: 4px 10px;">
-                    ✍️ Input Link
-                </button>`;
-            } else {
-                // User logic
                 if (s.status === 'New') {
-                    statusCell = `<button class="btn-small btn-primary btn-request-link" data-id="${s.id}" style="background: var(--accent-color); border-radius: 6px; padding: 4px 10px;">
-                        🚀 Request Link
+                    statusCell = `<button class="btn-small btn-primary btn-add-link pulse-new-request" data-id="${s.id}" data-link="N/A" title="Ưu tiên: Yêu cầu mới" style="background: #3b82f6; border-radius: 8px; width: 32px; height: 32px; padding: 0; display: inline-flex; align-items: center; justify-content: center;">
+                        <span style="font-size: 1.1em;">🚀</span>
                     </button>`;
                 } else if (s.status === 'Process') {
-                    statusCell = `<span class="tag" style="background: rgba(245, 158, 11, 0.1); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.2); padding: 4px 10px; border-radius: 6px;">
-                        ⏳ Processing...
-                    </span>`;
+                    statusCell = `<button class="btn-small btn-primary btn-add-link pulse-process" data-id="${s.id}" data-link="N/A" title="Đang xử lý" style="background: #f59e0b; border-radius: 8px; width: 32px; height: 32px; padding: 0; display: inline-flex; align-items: center; justify-content: center;">
+                        <span style="font-size: 1.1em;">⏳</span>
+                    </button>`;
                 } else {
-                    statusCell = `<span class="tag">${s.status}</span>`;
+                    statusCell = `<button class="btn-small btn-primary btn-add-link" data-id="${s.id}" data-link="N/A" title="Nhập Link" style="background: #10b981; border-radius: 8px; width: 32px; height: 32px; padding: 0; display: inline-flex; align-items: center; justify-content: center;">
+                        <span style="font-size: 1.1em;">✍️</span>
+                    </button>`;
+                }
+            } else {
+                if (s.status === 'New') {
+                    statusCell = `<button class="btn-small btn-primary btn-request-link pulse-new-request" data-id="${s.id}" title="Yêu cầu Link" style="background: var(--accent-color); border-radius: 8px; width: 32px; height: 32px; padding: 0; display: inline-flex; align-items: center; justify-content: center;">
+                        <span style="font-size: 1.1em;">🚀</span>
+                    </button>`;
+                } else if (s.status === 'Process') {
+                    statusCell = `<span class="pulse-process" title="Đang xử lý..." style="font-size: 1.3em; cursor: help; display: inline-block; width: 32px; height: 32px; text-align: center; line-height: 32px;">⏳</span>`;
+                } else {
+                    statusCell = `<span class="tag" title="${s.status}" style="font-size: 0.8em; padding: 2px 6px;">${s.status}</span>`;
                 }
             }
         }
@@ -3350,6 +3358,7 @@ async function renderSamplesTable() {
             <td><span class="date-text" style="opacity: 0.7;">${s.requestDate}</span></td>
             <td><span style="font-size: 0.9em; opacity: 0.8;">${s.requester}</span></td>
             <td>${statusCell}</td>
+            <td><span class="date-text" style="color: #ef4444; font-size: 0.85em; font-weight: 500;">${s.expiryDate || 'N/A'}</span></td>
             ${isAdmin || (user && s.requester === user.username) ? adminActions : ''}
         `;
         
