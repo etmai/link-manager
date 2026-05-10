@@ -235,6 +235,12 @@ Lưu ý: Chỉ trả về JSON duy nhất, không thêm bất kỳ văn bản gi
         await db.run("ALTER TABLE links ADD COLUMN sampleDate TEXT");
     }
 
+    // Migration for usa_holidays
+    const holidayCols = await db.all("PRAGMA table_info(usa_holidays)");
+    if (!holidayCols.map(c => c.name).includes('source')) {
+        await db.run("ALTER TABLE usa_holidays ADD COLUMN source TEXT DEFAULT 'telegram'");
+    }
+
     // Migration for work_schedule
     const scheduleCols = await db.all("PRAGMA table_info(work_schedule)");
     const scheduleColNames = scheduleCols.map(c => c.name);
@@ -1476,6 +1482,66 @@ app.post('/api/evergreen/import', authenticateToken, requireAdmin, async (req, r
         });
     } catch (e) {
         res.status(500).json({ error: 'Lỗi import từ Google Sheet: ' + e.message });
+    }
+});
+
+app.post('/api/holidays/import-unofficial', authenticateToken, requireAdmin, async (req, res) => {
+    const sheetUrl = process.env.UNOFFICIAL_HOLIDAY_SHEET_URL;
+
+    if (!sheetUrl) {
+        return res.status(400).json({ error: 'Chưa cấu hình UNOFFICIAL_HOLIDAY_SHEET_URL trong .env' });
+    }
+
+    try {
+        const csvData = await fetchWithRedirects(sheetUrl);
+        const lines = csvData.split(/\r?\n/).filter(line => line.trim());
+        
+        // Remove header if present
+        if (lines[0].toLowerCase().includes('event_name')) {
+            lines.shift();
+        }
+
+        const holidays = lines.map(line => {
+            // Very basic CSV split, handles simple data
+            const parts = line.split(',');
+            if (parts.length < 2) return null;
+            return {
+                name: parts[0].replace(/"/g, '').trim(),
+                date: parts[1].replace(/"/g, '').trim()
+            };
+        }).filter(h => h && h.name && h.date);
+
+        if (holidays.length === 0) {
+            return res.status(400).json({ error: 'Không tìm thấy dữ liệu ngày lễ trong sheet.' });
+        }
+
+        await db.exec('BEGIN TRANSACTION');
+        // Delete old unofficial holidays
+        await db.run("DELETE FROM usa_holidays WHERE source = 'google_sheet'");
+
+        const today = new Date();
+        for (const h of holidays) {
+            const hDate = new Date(h.date);
+            const diffTime = hDate - today;
+            const daysLeft = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            
+            // Only add future holidays or very recent ones? 
+            // Usually countdowns are for future ones.
+            if (daysLeft >= -1) {
+                const id = randomUUID();
+                await db.run(
+                    `INSERT INTO usa_holidays (id, name, date, days_left, priority_group, source, updatedAt) 
+                     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                    [id, h.name, h.date, daysLeft, 'Unofficial', 'google_sheet', new Date().toISOString()]
+                );
+            }
+        }
+        await db.exec('COMMIT');
+
+        res.json({ success: true, count: holidays.length });
+    } catch (e) {
+        if (db.inTransaction) await db.exec('ROLLBACK');
+        res.status(500).json({ error: 'Lỗi import: ' + e.message });
     }
 });
 

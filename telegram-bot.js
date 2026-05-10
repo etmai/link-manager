@@ -94,7 +94,7 @@ function initTelegramBot(db) {
                         let addedCount = 0;
 
                         // Clear old holidays before updating with the new report
-                        await executeQuery("DELETE FROM usa_holidays");
+                        await executeQuery("DELETE FROM usa_holidays WHERE source = 'telegram' OR source IS NULL");
 
                         for (const line of lines) {
                             const trimmed = line.trim();
@@ -113,9 +113,9 @@ function initTelegramBot(db) {
                                     const [_, name, date, daysLeft] = match;
                                     const id = randomUUID();
                                     await executeQuery(
-                                        `INSERT INTO usa_holidays (id, name, date, days_left, priority_group, updatedAt) 
-                                         VALUES (?, ?, ?, ?, ?, ?)`,
-                                        [id, name.trim(), date, parseInt(daysLeft), currentGroup, new Date().toISOString()]
+                                        `INSERT INTO usa_holidays (id, name, date, days_left, priority_group, source, updatedAt) 
+                                         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                                        [id, name.trim(), date, parseInt(daysLeft), currentGroup, 'telegram', new Date().toISOString()]
                                     );
                                     addedCount++;
                                 }

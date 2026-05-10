@@ -3758,7 +3758,10 @@ const TrendsAPI = {
         await renderTrendingNiches(); 
         return { success: true, message: 'Đã cập nhật dữ liệu...' };
     },
-    async refreshHolidays()       { return renderTrendingNiches(); }
+    async refreshHolidays()       { return renderTrendingNiches(); },
+    async importUnofficialHolidays() {
+        return API.fetch('/api/holidays/import-unofficial', { method: 'POST' });
+    }
 };
 
 function finStartEdit(id) {
@@ -3836,6 +3839,8 @@ async function renderTrendingNiches() {
                         <button id="btn-add-evergreen-kw" class="btn-primary" style="padding:8px 16px;white-space:nowrap;background:#10b981;border-color:#059669;">💾 Lưu Evergreen</button>
                         <div style="width:1px; height:24px; background:rgba(255,255,255,0.1); margin: 0 5px;"></div>
                         <button id="btn-refresh-trends" class="btn-secondary" style="padding:8px 14px;white-space:nowrap;" title="Fetch dữ liệu mới từ Google Trends">🔄 Refresh Trends</button>
+                        <div style="width:1px; height:24px; background:rgba(255,255,255,0.1); margin: 0 5px;"></div>
+                        <button id="btn-import-unofficial-holidays" class="btn-secondary" style="padding:8px 14px;white-space:nowrap; background:rgba(139, 92, 246, 0.1); border-color: rgba(139, 92, 246, 0.3); color: #a78bfa;" title="Import các ngày lễ không chính thức từ Google Sheet">📅 Import Unofficial</button>
                     </div>
                 </div>
             `;
@@ -3849,6 +3854,8 @@ async function renderTrendingNiches() {
                     handleAddEvergreenKeyword();
                 } else if (target.id === 'btn-refresh-trends') {
                     handleRefreshTrends();
+                } else if (target.id === 'btn-import-unofficial-holidays') {
+                    handleImportUnofficialHolidays();
                 }
             };
             
@@ -4512,6 +4519,20 @@ if (DOM.btnCancelAiEdit) {
 }
 if (DOM.btnSaveAiPrompt) {
     DOM.btnSaveAiPrompt.onclick = handleSaveAiPrompt;
+}
+
+async function handleImportUnofficialHolidays() {
+    const btn = document.getElementById('btn-import-unofficial-holidays');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Importing...'; }
+    try {
+        const res = await TrendsAPI.importUnofficialHolidays();
+        showSuccess(`✅ Đã import thành công ${res.count} ngày lễ từ Google Sheet!`);
+        renderTrendingNiches();
+    } catch(e) {
+        showError(e.message);
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = '📅 Import Unofficial'; }
+    }
 }
 
 

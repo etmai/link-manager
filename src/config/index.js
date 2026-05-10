@@ -25,6 +25,9 @@ const config = {
     evergreen: {
         sheetUrl: process.env.EVERGREEN_SHEET_URL || '',
     },
+    holidays: {
+        unofficialSheetUrl: process.env.UNOFFICIAL_HOLIDAY_SHEET_URL || '',
+    },
     rateLimit: {
         windowMs: 15 * 60 * 1000, // 15 minutes
         max: 1000,
