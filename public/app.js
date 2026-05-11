@@ -4091,37 +4091,18 @@ async function renderEvergreenKeywords() {
             const pinUrl = `https://www.pinterest.com/search/pins/?q=${q}&rs=shopping_filter&filter_location=1&domains=etsy.com&commerce_only=true`;
             const cfabUrl = `https://www.creativefabrica.com/search/?query=${encodeURIComponent(kw.keyword)}&sortBy=newest`;
 
-            let aiHtml = '<p style="opacity:0.6; font-style:italic; font-size:0.85em;">Chưa có phân tích AI.</p>';
-            if (kw.ai_analysis) {
-                try {
-                    const ai = typeof kw.ai_analysis === 'string' ? JSON.parse(kw.ai_analysis) : kw.ai_analysis;
-                    aiHtml = `
-                        <div class="ai-summary-content" style="font-size:0.8em; display:flex; flex-direction:column; gap:6px; opacity:0.9;">
-                            <div class="ai-meaning"><strong>💡 Ý nghĩa:</strong> ${ai.meaning || ''}</div>
-                            <div class="ai-products"><strong>📦 Sản phẩm:</strong> ${(ai.product_suggestions || []).slice(0,3).join(', ')}</div>
-                            <div class="ai-quotes"><strong>💬 Quotes:</strong> ${(ai.quotes || []).slice(0,2).join(' | ')}</div>
-                        </div>
-                    `;
-                } catch(e) { aiHtml = `<p style="font-size:0.8em;">${kw.ai_analysis}</p>`; }
-            }
-
             return `
             <div class="dinoz-premium-list-item" style="border-color: rgba(16, 185, 129, 0.2) !important;">
                 <div class="niche-card-header">
                     <div style="display:flex; flex-direction:column; gap:4px; width:100%;">
                         <div style="display:flex; justify-content:space-between; align-items:start;">
                             <h4 class="niche-card-title">🌲 ${kw.keyword}</h4>
-                            ${isAdmin ? `<button class="btn-ai evergreen-analyze-btn" data-keyword="${kw.keyword.replace(/'/g,"\\'")}" style="background:none; border:none; cursor:pointer; font-size:1.2em;" title="Analyze AI">🤖</button>` : ''}
                         </div>
                         <button class="trend-copy-inline-btn" onclick="copyToClipboard('${kw.keyword.replace(/'/g,"\\'")}', this)">📋 Copy Keyword</button>
                     </div>
                 </div>
                 
-                <div class="niche-card-summary" style="margin: 10px 0; background:rgba(16,185,129,0.03); padding:10px; border-radius:8px; border:1px solid rgba(16,185,129,0.1);">
-                    ${aiHtml}
-                </div>
-
-                <div class="niche-card-footer" style="border-top: 1px solid rgba(16, 185, 129, 0.1);">
+                <div class="niche-card-footer" style="border-top: 1px solid rgba(16, 185, 129, 0.1); margin-top: 15px;">
                     <div class="quick-links-group">
                         <div class="quick-links-row">
                             <a href="${etsyUrl}" target="_blank" class="trend-link-btn trend-etsy">Etsy</a>
@@ -4140,15 +4121,11 @@ async function renderEvergreenKeywords() {
         // Add Event Delegation for Evergreen cards
         container.onclick = async (e) => {
             const deleteBtn = e.target.closest('.evergreen-delete-btn');
-            const analyzeBtn = e.target.closest('.evergreen-analyze-btn');
             
             if (deleteBtn) {
                 const id = deleteBtn.dataset.id;
                 const keyword = deleteBtn.dataset.keyword;
                 window.openDeleteModal('evergreen', id, keyword);
-            } else if (analyzeBtn) {
-                const keyword = analyzeBtn.dataset.keyword;
-                await window.handleAnalyzeAi(keyword, 'evergreen', analyzeBtn);
             }
         };
 
