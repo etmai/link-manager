@@ -4027,19 +4027,24 @@ async function renderTrendingNiches() {
                     const groupHtml = items.map(h => {
                         const daysUntil = parseInt(h.days_left);
                         const urgentClass = daysUntil <= 30 ? 'urgent' : '';
+                        const isUnofficial = h.source === 'google_sheet' || h.priority_group === 'Unofficial';
+                        const cardClass = `holiday-card ${urgentClass} ${isUnofficial ? 'unofficial' : 'official'}`;
+                        const emoji = isUnofficial ? '🎈' : '🇺🇸';
+                        const badgeText = isUnofficial ? 'Unofficial' : 'Official';
                         const dateObj = new Date(h.date);
                         const dayNum = dateObj.getDate();
                         const monthName = dateObj.toLocaleString('en-US', { month: 'short' }).toUpperCase();
                         
                         return `
-                        <div class="holiday-card ${urgentClass}">
-                            <div class="holiday-emoji">🇺🇸</div>
+                        <div class="${cardClass}">
+                            <div class="holiday-type-badge">${badgeText}</div>
+                            <div class="holiday-emoji">${emoji}</div>
                             <div class="holiday-details">
                                 <div class="holiday-title">${h.name}</div>
                                 <div class="holiday-date-info">${monthName} ${dayNum} &nbsp;•&nbsp; ${h.date}</div>
                             </div>
                             <div class="holiday-countdown-box">
-                                <div class="holiday-countdown-big" style="color:${daysUntil <= 30 ? '#ef4444' : '#10b981'};">${daysUntil <= 0 ? '0' : daysUntil}</div>
+                                <div class="holiday-countdown-big" style="color:${daysUntil <= 30 ? '#ef4444' : (isUnofficial ? '#a78bfa' : '#10b981')};">${daysUntil <= 0 ? '0' : daysUntil}</div>
                                 <div class="holiday-countdown-label">Ngày</div>
                             </div>
                         </div>`;

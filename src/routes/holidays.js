@@ -14,10 +14,31 @@ module.exports = function (Router, db) {
     // ─── GET /api/usa-holidays — NO auth required ─────────────────
     router.get('/api/usa-holidays', async (req, res) => {
         try {
+            const today = new Date();
             const holidays = await db.usaHoliday.findMany({
                 orderBy: { date: 'asc' },
             });
-            res.json(holidays);
+
+            const seen = new Set();
+            const filtered = holidays.map(h => {
+                const hDate = new Date(h.date);
+                const diffTime = hDate - today;
+                const daysLeft = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                return { ...h, days_left: daysLeft };
+            }).filter(h => {
+                // 1. De-duplicate by name + date
+                const key = `${h.name}|${h.date}`;
+                if (seen.has(key)) return false;
+                seen.add(key);
+
+                // 2. Hide if less than 7 days left (applies to ALL holidays now)
+                if (h.days_left < 7) {
+                    return false;
+                }
+                return true;
+            });
+
+            res.json(filtered);
         } catch (err) {
             console.error('[Holidays] GET usa-holidays error:', err);
             res.status(500).json({ error: 'Failed to fetch USA holidays.' });
