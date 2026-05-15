@@ -2335,7 +2335,8 @@ function renderStatistics() {
     // Calculate Top Design
     const designCount = {};
     cachedSales.forEach(s => { 
-        if (s.design_id) designCount[s.design_id] = (designCount[s.design_id] || 0) + s.sales; 
+        const dId = (s.design_id || '').trim();
+        if (dId) designCount[dId] = (designCount[dId] || 0) + (s.sales || 0); 
     });
     const topDesign = Object.entries(designCount).sort((a, b) => b[1] - a[1])[0]?.[0] || '—';
 
@@ -2368,10 +2369,11 @@ function renderStatistics() {
 function renderTopProducts(tbodyId, data) {
     const grouped = {};
     data.forEach(s => {
-        if (!grouped[s.sku]) grouped[s.sku] = { sku: s.sku, title: s.title || s.sku, design_id: s.design_id, total: 0 };
-        grouped[s.sku].total += s.sales;
-        // Keep the latest design_id for that SKU if multiple exist
-        if (s.design_id) grouped[s.sku].design_id = s.design_id;
+        const key = (s.design_id && s.design_id.trim() !== '') ? s.design_id : s.sku;
+        if (!grouped[key]) {
+            grouped[key] = { sku: s.sku, title: s.title || s.sku, design_id: s.design_id || 'N/A', total: 0 };
+        }
+        grouped[key].total += (s.sales || 0);
     });
     const sorted = Object.values(grouped).sort((a, b) => b.total - a.total).slice(0, 10);
     const tbody = document.getElementById(tbodyId);
