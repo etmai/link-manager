@@ -627,7 +627,8 @@ function extractTitleFromHtml(html, platform) {
             // Simple HTML entity decoding
             title = title.replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#039;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>');
             // Filter out generic Amazon page titles
-            if (platform === 'amazon' && (title.toLowerCase() === 'amazon.com' || title.toLowerCase() === 'amazon')) continue;
+            const lowerTitle = title.toLowerCase();
+            if (platform === 'amazon' && (lowerTitle === 'amazon.com' || lowerTitle === 'amazon' || lowerTitle.includes('spend less. smile more.') || lowerTitle.includes('robot check'))) continue;
             if (title) return title;
         }
     }
@@ -635,7 +636,7 @@ function extractTitleFromHtml(html, platform) {
 }
 
 const SCRAPE_HEADERS = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+    'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
     'Accept-Language': 'en-US,en;q=0.9',
     'Cache-Control': 'no-cache',
@@ -662,7 +663,18 @@ app.get('/api/scrape/amazon/:asin', authenticateToken, async (req, res) => {
             console.warn('[SCRAPER] Amazon detected automated access (Robot Check).');
         }
 
-        const title = extractTitleFromHtml(html, 'amazon');
+        let title = extractTitleFromHtml(html, 'amazon');
+        
+        if (!title || !response.ok) {
+            console.log('[SCRAPER] Using Microlink fallback... (Response was not OK or title not found)');
+            const fallbackRes = await fetch(`https://api.microlink.io/?url=${encodeURIComponent('https://www.amazon.com/dp/' + asin)}`);
+            if (fallbackRes.ok) {
+                const fallbackData = await fallbackRes.json();
+                if (fallbackData.data && fallbackData.data.title) {
+                    title = fallbackData.data.title;
+                }
+            }
+        }
         if (title) {
             console.log(`[SCRAPER] Success: ${title.substring(0, 50)}...`);
             res.json({ title });

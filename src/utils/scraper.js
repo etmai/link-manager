@@ -3,7 +3,7 @@
  */
 
 const SCRAPE_HEADERS = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+    'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
     'Accept-Language': 'en-US,en;q=0.9',
     'Accept-Encoding': 'gzip, deflate, br',
@@ -58,7 +58,8 @@ function extractTitleFromHtml(html, platform) {
                 .replace(/&#039;/g, "'")
                 .replace(/&lt;/g, '<')
                 .replace(/&gt;/g, '>');
-            if (platform === 'amazon' && (title.toLowerCase() === 'amazon.com' || title.toLowerCase() === 'amazon')) {
+            const lowerTitle = title.toLowerCase();
+            if (platform === 'amazon' && (lowerTitle === 'amazon.com' || lowerTitle === 'amazon' || lowerTitle.includes('spend less. smile more.') || lowerTitle.includes('robot check'))) {
                 continue;
             }
             if (title) return title;
@@ -92,7 +93,17 @@ async function scrapeProduct(platform, id) {
         clearTimeout(timeoutId);
 
         const html = await response.text();
-        const title = extractTitleFromHtml(html, platform);
+        let title = extractTitleFromHtml(html, platform);
+
+        if ((!title || !response.ok) && platform === 'amazon') {
+            const fallbackRes = await fetch(`https://api.microlink.io/?url=${encodeURIComponent(url)}`);
+            if (fallbackRes.ok) {
+                const fallbackData = await fallbackRes.json();
+                if (fallbackData.data && fallbackData.data.title) {
+                    title = fallbackData.data.title;
+                }
+            }
+        }
 
         if (!title) {
             const err = new Error(`Không tìm thấy tiêu đề ${platform}!`);

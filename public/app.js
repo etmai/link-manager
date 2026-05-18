@@ -3920,7 +3920,7 @@ async function renderTrendingNiches() {
                     const pinUrl = `https://www.pinterest.com/search/pins/?q=${q}&rs=shopping_filter&filter_location=1&domains=etsy.com&commerce_only=true`;
                     const cfabUrl = `https://www.creativefabrica.com/search/?query=${encodeURIComponent(kw.keyword)}&sortBy=newest`;
                     
-                    let aiHtml = '<p style="opacity:0.6; font-style:italic;">Chưa có phân tích AI cho niche này.</p>';
+                    let aiHtml = '';
                     const aiData = kw.ai_analysis || kw.ai_summary;
                     if (aiData) {
                         try {
@@ -3958,9 +3958,10 @@ async function renderTrendingNiches() {
                             <span class="niche-card-category">${kw.category}</span>
                         </div>
                         
+                        ${aiHtml ? `
                         <div class="niche-card-summary" style="margin-bottom:15px; background:rgba(0,0,0,0.2); padding:12px; border-radius:8px; border:1px solid rgba(255,255,255,0.05);">
                             ${aiHtml}
-                        </div>
+                        </div>` : ''}
                         
                         <div class="heat-bar-wrapper">
                             <div class="heat-bar-header">
